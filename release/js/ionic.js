@@ -317,6 +317,25 @@ window.ionic = {
     swapNodes: function(src, dest) {
       dest.parentNode.insertBefore(src, dest);
     },
+
+    /**
+     * @private
+     */
+    centerElementByMargin: function(el) {
+      el.style.marginLeft = (-el.offsetWidth) / 2 + 'px';
+      el.style.marginTop = (-el.offsetHeight) / 2 + 'px';
+    },
+    //Center twice, after raf, to fix a bug with ios and showing elements
+    //that have just been attached to the DOM.
+    centerElementByMarginTwice: function(el) {
+      ionic.requestAnimationFrame(function() {
+        ionic.DomUtil.centerElementByMargin(el);
+        ionic.requestAnimationFrame(function() {
+          ionic.DomUtil.centerElementByMargin(el);
+        });
+      });
+    },
+
     /**
      * @ngdoc method
      * @name ionic.DomUtil#getParentWithClass
@@ -499,6 +518,14 @@ window.ionic = {
      * @name ionic.EventController#onGesture
      * @alias ionic.onGesture
      * @description Add an event listener for a gesture on an element.
+     *
+     * Available eventTypes (from [hammer.js](http://eightmedia.github.io/hammer.js/)):
+     *
+     * `hold`, `tap`, `doubletap`, `drag`, `dragstart`, `dragend`, `dragup`, `dragdown`, <br/>
+     * `dragleft`, `dragright`, `swipe`, `swipeup`, `swipedown`, `swipeleft`, `swiperight`, <br/>
+     * `transform`, `transformstart`, `transformend`, `rotate`, `pinch`, `pinchin`, `pinchout`, </br>
+     * `touch`, `release`
+     *
      * @param {string} eventType The gesture event to listen for.
      * @param {function(e)} callback The function to call when the gesture
      * happens.
@@ -1605,7 +1632,7 @@ window.ionic = {
       doubletap_interval	: 300
     },
     handler: function tapGesture(ev, inst) {
-      if(ev.eventType == ionic.Gestures.EVENT_END) {
+      if(ev.eventType == ionic.Gestures.EVENT_END && ev.srcEvent.type != 'touchcancel') {
         // previous gesture, for the double tap since these are two different gesture detections
         var prev = ionic.Gestures.detection.previous,
         did_doubletap = false;
@@ -1973,8 +2000,12 @@ window.ionic = {
      * @ngdoc method
      * @name ionic.Platform#ready
      * @description
-     * Trigger a callback once the device is ready,
-     * or immediately if the device is already ready.
+     * Trigger a callback once the device is ready, or immediately
+     * if the device is already ready. This method can be run from
+     * anywhere and does not need to be wrapped by any additonal methods.
+     * When the app is within a WebView (Cordova), it'll fire
+     * the callback once the device is ready. If the app is within
+     * a web browser, it'll fire the callback after `window.load`.
      * @param {function} callback The function to call.
      */
     ready: function(cb) {
@@ -2011,7 +2042,7 @@ window.ionic = {
      */
     device: function() {
       if(window.device) return window.device;
-      if(this.isCordova()) void 0;
+      if(this.isWebView()) void 0;
       return {};
     },
 
@@ -2019,7 +2050,10 @@ window.ionic = {
       this.platforms = [];
       this.grade = 'a';
 
-      if(this.isCordova()) this.platforms.push('cordova');
+      if(this.isWebView()) {
+        this.platforms.push('webview');
+        this.platforms.push('cordova');
+      }
       if(this.isIPad()) this.platforms.push('ipad');
 
       var platform = this.platform();
@@ -2046,10 +2080,10 @@ window.ionic = {
 
     /**
      * @ngdoc method
-     * @name ionic.Platform#isCordova
-     * @returns {boolean} Whether we are running on Cordova.
+     * @name ionic.Platform#isWebView
+     * @returns {boolean} Check if we are running within a WebView (such as Cordova).
      */
-    isCordova: function() {
+    isWebView: function() {
       return !(!window.cordova && !window.PhoneGap && !window.phonegap);
     },
     /**
@@ -2233,7 +2267,7 @@ window.ionic = {
 
   // setup listeners to know when the device is ready to go
   function onWindowLoad() {
-    if(ionic.Platform.isCordova()) {
+    if(ionic.Platform.isWebView()) {
       // the window and scripts are fully loaded, and a cordova/phonegap
       // object exists then let's listen for the deviceready
       document.addEventListener("deviceready", onPlatformReady, false);
@@ -2343,169 +2377,260 @@ window.ionic = {
 (function(window, document, ionic) {
   'use strict';
 
-  // polyfill use to simulate native "tap"
-  ionic.tapElement = function(target, e) {
-    // simulate a normal click by running the element's click method then focus on it
-
-    var ele = target.control || target;
-
-    if(ele.disabled || ele.type === 'file' || ele.type === 'range') return;
-
-    void 0;
-
-    var c = getCoordinates(e);
-
-    // using initMouseEvent instead of MouseEvent for our Android friends
-    var clickEvent = document.createEvent("MouseEvents");
-    clickEvent.initMouseEvent('click', true, true, window,
-                              1, 0, 0, c.x, c.y,
-                              false, false, false, false, 0, null);
-
-    ele.dispatchEvent(clickEvent);
-
-    if(ele.tagName === 'INPUT' || ele.tagName === 'TEXTAREA') {
-      ele.focus();
-      e.preventDefault();
-    } else {
-      blurActive();
-    }
-
-    // remember the coordinates of this tap so if it happens again we can ignore it
-    // but only if the coordinates are not already being actively disabled
-    if( !isRecentTap(e) ) {
-      recordCoordinates(e);
-    }
-
-    if(target.control) {
-      void 0;
-      return stopEvent(e);
-    }
-  };
-
-  function tapPolyfill(orgEvent) {
-    // if the source event wasn't from a touch event then don't use this polyfill
-    if(!orgEvent.gesture || !orgEvent.gesture.srcEvent) return;
-
-    var e = orgEvent.gesture.srcEvent; // evaluate the actual source event, not the created event by gestures.js
-    var ele = e.target;
-
-    if( isRecentTap(e) ) {
-      // if a tap in the same area just happened, don't continue
-      void 0;
-      return stopEvent(e);
-    }
-
-    for(var x=0; x<5; x++) {
-      // climb up the DOM looking to see if the tapped element is, or has a parent, of one of these
-      // only climb up a max of 5 parents, anything more probably isn't beneficial
-      if(!ele) break;
-
-      if( ele.tagName === "INPUT" ||
-          ele.tagName === "A" ||
-          ele.tagName === "BUTTON" ||
-          ele.tagName === "LABEL" ||
-          ele.tagName === "TEXTAREA" ) {
-
-        return ionic.tapElement(ele, e);
-      }
-      ele = ele.parentElement;
-    }
-
-    // they didn't tap one of the above elements
-    // if the currently active element is an input, and they tapped outside
-    // of the current input, then unset its focus (blur) so the keyboard goes away
-    blurActive();
-  }
-
-  function preventGhostClick(e) {
-
-    void 0;
-
-
-    if(e.target.control || isRecentTap(e) || isScrolledSinceStart(e)) {
-      return stopEvent(e);
-    }
-
-    // remember the coordinates of this click so if a tap or click in the
-    // same area quickly happened again we can ignore it
-    recordCoordinates(e);
-  }
-
-  function isRecentTap(event) {
-    // loop through the tap coordinates and see if the same area has been tapped recently
-    var tapId, existingCoordinates, currentCoordinates;
-
-    for(tapId in tapCoordinates) {
-      existingCoordinates = tapCoordinates[tapId];
-      if(!currentCoordinates) currentCoordinates = getCoordinates(event); // lazy load it when needed
-
-      if(currentCoordinates.x > existingCoordinates.x - HIT_RADIUS &&
-         currentCoordinates.x < existingCoordinates.x + HIT_RADIUS &&
-         currentCoordinates.y > existingCoordinates.y - HIT_RADIUS &&
-         currentCoordinates.y < existingCoordinates.y + HIT_RADIUS) {
-        // the current tap coordinates are in the same area as a recent tap
-        return existingCoordinates;
-      }
-    }
-  }
-
-  function isScrolledSinceStart(event) {
-    // check if this click's coordinates are different than its touchstart/mousedown
-    var c = getCoordinates(event);
-
-    // Quick check for 0,0 which could be simulated mouse click for form submission
-    if(c.x === 0 && c.y === 0) {
-      return false;
-    }
-
-    return (c.x > startCoordinates.x + 2 ||
-            c.x < startCoordinates.x - 2 ||
-            c.y > startCoordinates.y + 2 ||
-            c.y < startCoordinates.y - 2);
-  }
-
-  function recordCoordinates(event) {
-    var c = getCoordinates(event);
-    if(c.x && c.y) {
-      var tapId = Date.now();
-
-      // only record tap coordinates if we have valid ones
-      tapCoordinates[tapId] = { x: c.x, y: c.y, id: tapId };
-
-      setTimeout(function() {
-        // delete the tap coordinates after X milliseconds, basically allowing
-        // it so a tap can happen again in the same area in the future
-        delete tapCoordinates[tapId];
-      }, CLICK_PREVENT_DURATION);
-    }
-  }
-
-  function getCoordinates(event) {
-    // This method can get coordinates for both a mouse click
-    // or a touch depending on the given event
-    var gesture = (event.gesture ? event.gesture : event);
-
-    if(gesture) {
-      var touches = gesture.touches && gesture.touches.length ? gesture.touches : [gesture];
-      var e = (gesture.changedTouches && gesture.changedTouches[0]) ||
-          (gesture.originalEvent && gesture.originalEvent.changedTouches &&
-              gesture.originalEvent.changedTouches[0]) ||
-          touches[0].originalEvent || touches[0];
-
-      if(e) return { x: e.clientX || e.pageX, y: e.clientY || e.pageY };
-    }
-    return { x:0, y:0 };
-  }
-
+  var CLICK_PREVENT_DURATION = 1500; // max milliseconds ghostclicks in the same area should be prevented
+  var REMOVE_PREVENT_DELAY = 380; // delay after a touchend/mouseup before removing the ghostclick prevent
+  var REMOVE_PREVENT_DELAY_GRADE_C = 800; // same as REMOVE_PREVENT_DELAY, but for grade c devices
+  var HIT_RADIUS = 15; // surrounding area of a click that if a ghostclick happens it would get ignored
+  var TOUCH_TOLERANCE_X = 10; // how much the X coordinates can be off between start/end, but still a click
+  var TOUCH_TOLERANCE_Y = 6; // how much the Y coordinates can be off between start/end, but still a click
+  var tapCoordinates = {}; // used to remember coordinates to ignore if they happen again quickly
+  var startCoordinates = {}; // used to remember where the coordinates of the start of a touch
   var clickPreventTimerId;
-  function removeClickPrevent(e) {
-    clearTimeout(clickPreventTimerId);
-    clickPreventTimerId = setTimeout(function(){
-      var tap = isRecentTap(e);
-      if(tap) delete tapCoordinates[tap.id];
+  var _hasTouchScrolled = false; // if the touchmove already exceeded the touchmove tolerance
+  var _activeElement; // the element which has focus
+
+
+  ionic.tap = {
+
+    tapInspect: function(orgEvent) {
+      // if the event doesn't have a gesture then don't continue
+      if(!orgEvent.gesture || !orgEvent.gesture.srcEvent) return;
+
+      var e = orgEvent.gesture.srcEvent; // evaluate the actual source event, not the created event by gestures.js
+      var ele = e.target; // get the target element that was actually tapped
+
+      if( ionic.tap.ignoreTapInspect(e) ) {
+        // if a tap in the same area just happened,
+        // or it was a touchcanel event, don't continue
+        void 0;
+        return stopEvent(e);
+      }
+
+      for(var x=0; x<5; x++) {
+        // climb up the DOM looking to see if the tapped element is, or has a parent, of one of these
+        // only climb up a max of 5 parents, anything more probably isn't beneficial
+        if(!ele) break;
+
+        if( ionic.tap.isTapElement(ele.tagName) ) {
+          return ionic.tap.simulateClick(ele, e);
+        }
+        ele = ele.parentElement;
+      }
+
+      // they didn't tap one of the above elements
+      // if the currently active element is an input, and they tapped outside
+      // of the current input, then unset its focus (blur) so the keyboard goes away
+      ionic.tap.blurActive();
+    },
+
+    ignoreTapInspect: function(e) {
+      return !!ionic.tap.isRecentTap(e) ||
+             ionic.tap.hasTouchScrolled(e) ||
+             e.type === 'touchcancel';
+    },
+
+    isTapElement: function(tagName) {
+      return tagName == 'A' ||
+             tagName == 'INPUT' ||
+             tagName == 'BUTTON' ||
+             tagName == 'LABEL' ||
+             tagName == 'TEXTAREA' ||
+             tagName == 'SELECT';
+    },
+
+    simulateClick: function(target, e) {
+      // simulate a normal click by running the element's click method then focus on it
+
+      var ele = target.control || target;
+
+      if( ionic.tap.ignoreSimulateClick(ele) ) return;
+
+      void 0;
+
+      var c = ionic.tap.getCoordinates(e);
+
+      // using initMouseEvent instead of MouseEvent for our Android friends
+      var clickEvent = document.createEvent("MouseEvents");
+      clickEvent.initMouseEvent('click', true, true, window,
+                                1, 0, 0, c.x, c.y,
+                                false, false, false, false, 0, null);
+
+      ele.dispatchEvent(clickEvent);
+
+      // if it's an input, focus in on the target, otherwise blur
+      ionic.tap.handleFocus(ele);
+
+      // remember the coordinates of this tap so if it happens again we can ignore it
+      // but only if the coordinates are not already being actively disabled
+      if( !ionic.tap.isRecentTap(e) ) {
+        ionic.tap.recordCoordinates(e);
+      }
+
+      if(target.control) {
+        void 0;
+        return stopEvent(e);
+      }
+
+    },
+
+    ignoreSimulateClick: function(ele) {
+      return ele.disabled || ele.type === 'range';
+    },
+
+    handleFocus: function(ele) {
+      if(ionic.tap.activeElement() !== ele) {
+        // only set the focus if it doesn't already have it
+        if( ele.tagName.match(/input|textarea|select/i) ) {
+          ionic.tap.activeElement(ele);
+          ele.focus();
+        } else {
+          ionic.tap.activeElement(null);
+          ionic.tap.blurActive();
+        }
+      }
+    },
+
+    preventGhostClick: function(e) {
+
+      void 0;
+
+
+      if(e.target.control || ionic.tap.isRecentTap(e) || ionic.tap.hasTouchScrolled(e)) {
+        return stopEvent(e);
+      }
+
+      // remember the coordinates of this click so if a tap or click in the
+      // same area quickly happened again we can ignore it
+      ionic.tap.recordCoordinates(e);
+    },
+
+    getCoordinates: function(event) {
+      // This method can get coordinates for both a mouse click
+      // or a touch depending on the given event
+      var gesture = (event.gesture ? event.gesture : event);
+
+      if(gesture) {
+        var touches = gesture.touches && gesture.touches.length ? gesture.touches : [gesture];
+        var e = (gesture.changedTouches && gesture.changedTouches[0]) ||
+            (gesture.originalEvent && gesture.originalEvent.changedTouches &&
+                gesture.originalEvent.changedTouches[0]) ||
+            touches[0].originalEvent || touches[0];
+
+        if(e) return { x: e.clientX || e.pageX || 0, y: e.clientY || e.pageY || 0 };
+      }
+      return { x:0, y:0 };
+    },
+
+    hasTouchScrolled: function(event) {
+      if(_hasTouchScrolled) return true;
+
+      // check if this click's coordinates are different than its touchstart/mousedown
+      var c = ionic.tap.getCoordinates(event);
+
+      // Quick check for 0,0 which could be simulated mouse click for form submission
+      if(c.x === 0 && c.y === 0) {
+        return false;
+      }
+
+      // the allowed distance between touchstart/mousedown and
+      return (c.x > startCoordinates.x + TOUCH_TOLERANCE_X ||
+              c.x < startCoordinates.x - TOUCH_TOLERANCE_X ||
+              c.y > startCoordinates.y + TOUCH_TOLERANCE_Y ||
+              c.y < startCoordinates.y - TOUCH_TOLERANCE_Y);
+    },
+
+    recordCoordinates: function(event) {
+      // get the coordinates of this event and remember them for later
+      var c = ionic.tap.getCoordinates(event);
+      if(c.x && c.y) {
+        var tapId = Date.now();
+
+        // only record tap coordinates if we have valid ones
+        tapCoordinates[tapId] = { x: c.x, y: c.y, id: tapId };
+
+        setTimeout(function() {
+          // delete the tap coordinates after X milliseconds, basically allowing
+          // it so a tap can happen again in the same area in the future
+          // this is only a fallback, most tap coordinates will be removed
+          // from the removeClickPrevent event fired by touchend/mouseup
+          delete tapCoordinates[tapId];
+        }, CLICK_PREVENT_DURATION);
+      }
+    },
+
+    removeClickPrevent: function(e) {
+      // fired by touchend/mouseup
+      // after X milliseconds, remove tap coordinates
+      clearTimeout(clickPreventTimerId);
+      clickPreventTimerId = setTimeout(function(){
+        var tap = ionic.tap.isRecentTap(e);
+        if(tap) delete tapCoordinates[tap.id];
+      }, REMOVE_PREVENT_DELAY);
+    },
+
+    isRecentTap: function(event) {
+      // loop through the tap coordinates and see if the same area has been tapped recently
+      var tapId, existingCoordinates, currentCoordinates;
+
+      for(tapId in tapCoordinates) {
+        existingCoordinates = tapCoordinates[tapId];
+        if(!currentCoordinates) currentCoordinates = ionic.tap.getCoordinates(event); // lazy load it when needed
+
+        if(currentCoordinates.x > existingCoordinates.x - HIT_RADIUS &&
+           currentCoordinates.x < existingCoordinates.x + HIT_RADIUS &&
+           currentCoordinates.y > existingCoordinates.y - HIT_RADIUS &&
+           currentCoordinates.y < existingCoordinates.y + HIT_RADIUS) {
+          // the current tap coordinates are in the same area as a recent tap
+          return existingCoordinates;
+        }
+      }
+    },
+
+    blurActive: function() {
+      var ele = ionic.tap.activeElement();
+      if(ele && ele.tagName.match(/input|textarea|select/i) ) {
+        setTimeout(function(){
+          ele.blur();
+          ionic.tap.activeElement(null);
+        }, 400);
+      }
+    },
+
+    activeElement: function(ele) {
+      if(arguments.length) {
+        _activeElement = ele;
+      }
+      return _activeElement || document.activeElement;
+    },
+
+    setTouchStart: function(e) {
+      _hasTouchScrolled = false;
+      startCoordinates = ionic.tap.getCoordinates(e);
+      document.body.addEventListener('touchmove', ionic.tap.onTouchMove, false);
+    },
+
+    onTouchMove: function(e) {
+      if( ionic.tap.hasTouchScrolled(e) ) {
+        _hasTouchScrolled = true;
+        document.body.removeEventListener('touchmove', ionic.tap.onTouchMove);
+        void 0;
+      }
+    },
+
+    reset: function() {
+      tapCoordinates = {};
       startCoordinates = {};
-    }, REMOVE_PREVENT_DELAY);
-  }
+    },
+
+    ignoreScrollStart: function(e) {
+      return (e.defaultPrevented) ||  // defaultPrevented has been assigned by another component handling the event
+             (e.target.tagName.match(/input|textarea/i) && ionic.tap.activeElement() === e.target) || // target is the active element, so its a second tap to select input text
+             (e.target.isContentEditable) ||
+             (e.target.dataset ? e.target.dataset.preventScroll : e.target.getAttribute('data-prevent-default')) == 'true' || // manually set within an elements attributes
+             (!!e.target.tagName.match(/object|embed/i));  // flash/movie/object touches should not try to scroll
+    }
+
+  };
 
   function stopEvent(e){
     e.stopPropagation();
@@ -2513,48 +2638,26 @@ window.ionic = {
     return false;
   }
 
-  function blurActive() {
-    var ele = document.activeElement;
-    if(ele && (ele.tagName === "INPUT" ||
-               ele.tagName === "TEXTAREA")) {
-      // using a timeout to prevent funky scrolling while a keyboard hides
-      setTimeout(function(){
-        ele.blur();
-      }, 400);
-    }
-  }
-
-  function recordStartCoordinates(e) {
-    startCoordinates = getCoordinates(e);
-  }
-
-  var tapCoordinates = {}; // used to remember coordinates to ignore if they happen again quickly
-  var startCoordinates = {}; // used to remember where the coordinates of the start of the tap
-  var CLICK_PREVENT_DURATION = 1500; // max milliseconds ghostclicks in the same area should be prevented
-  var REMOVE_PREVENT_DELAY = 380; // delay after a touchend/mouseup before removing the ghostclick prevent
-  var HIT_RADIUS = 15;
-
   ionic.Platform.ready(function(){
-
     if(ionic.Platform.grade === 'c') {
-      // low performing phones should have a longer ghostclick prevent
-      REMOVE_PREVENT_DELAY = 800;
+      // low performing devices should have a longer ghostclick prevent
+      REMOVE_PREVENT_DELAY = REMOVE_PREVENT_DELAY_GRADE_C;
     }
-
-    // set global click handler and check if the event should stop or not
-    document.addEventListener('click', preventGhostClick, true);
-
-    // global release event listener polyfill for HTML elements that were tapped or held
-    ionic.on("release", tapPolyfill, document);
-
-    // listeners used to remove ghostclick prevention
-    document.addEventListener('touchend', removeClickPrevent, false);
-    document.addEventListener('mouseup', removeClickPrevent, false);
-
-    // in the case the user touched the screen, then scrolled, it shouldn't fire the click
-    document.addEventListener('touchstart', recordStartCoordinates, false);
-    document.addEventListener('mousedown', recordStartCoordinates, false);
   });
+
+  // set click handler and check if the event should be stopped or not
+  document.addEventListener('click', ionic.tap.preventGhostClick, true);
+
+  // set release event listener for HTML elements that were tapped or held
+  ionic.on("release", ionic.tap.tapInspect, document);
+
+  // listeners used to clear out active taps which are used to prevention ghostclicks
+  document.addEventListener('touchend', ionic.tap.removeClickPrevent, false);
+  document.addEventListener('mouseup', ionic.tap.removeClickPrevent, false);
+
+  // remember where the user first started touching the screen
+  // so that if they scrolled, it shouldn't fire the click
+  document.addEventListener('touchstart', ionic.tap.setTouchStart, false);
 
 })(this, document, ionic);
 
@@ -2564,10 +2667,14 @@ window.ionic = {
   var queueElements = {};   // elements that should get an active state in XX milliseconds
   var activeElements = {};  // elements that are currently active
   var keyId = 0;            // a counter for unique keys for the above ojects
+  var ACTIVATED_CLASS = 'activated';
+  var touchMoveClearTimer;
 
   ionic.activator = {
 
     start: function(e) {
+      clearTimeout(touchMoveClearTimer);
+
       // when an element is touched/clicked, it climbs up a few
       // parents to see if it is an .item or .button element
       ionic.requestAnimationFrame(function(){
@@ -2598,8 +2705,10 @@ window.ionic = {
           // add listeners to clear all queued/active elements onMove
           if(e.type === 'touchstart') {
             document.body.removeEventListener('mousedown', ionic.activator.start);
-            document.body.addEventListener('touchmove', clear, false);
-            setTimeout(activateElements, 85);
+            touchMoveClearTimer = setTimeout(function(){
+              document.body.addEventListener('touchmove', onTouchMove, false);
+            }, 80);
+            setTimeout(activateElements, 80);
           } else {
             document.body.addEventListener('mousemove', clear, false);
             ionic.requestAnimationFrame(activateElements);
@@ -2616,7 +2725,7 @@ window.ionic = {
     // activate all elements in the queue
     for(var key in queueElements) {
       if(queueElements[key]) {
-        queueElements[key].classList.add('active');
+        queueElements[key].classList.add(ACTIVATED_CLASS);
         activeElements[key] = queueElements[key];
       }
     }
@@ -2626,9 +2735,15 @@ window.ionic = {
   function deactivateElements() {
     for(var key in activeElements) {
       if(activeElements[key]) {
-        activeElements[key].classList.remove('active');
+        activeElements[key].classList.remove(ACTIVATED_CLASS);
         delete activeElements[key];
       }
+    }
+  }
+
+  function onTouchMove(e) {
+    if( ionic.tap.hasTouchScrolled(e) ) {
+      clear();
     }
   }
 
@@ -2638,6 +2753,8 @@ window.ionic = {
   }
 
   function clear() {
+    clearTimeout(touchMoveClearTimer);
+
     // clear out any elements that are queued to be set to active
     queueElements = {};
 
@@ -2915,8 +3032,6 @@ function androidKeyboardFix() {
 
 })(window.ionic);
 
-var IS_INPUT_LIKE_REGEX = /input|textarea|select/i;
-var IS_EMBEDDED_OBJECT_REGEX = /object|embed/i;
 /*
  * Scroller
  * http://github.com/zynga/scroller
@@ -3535,19 +3650,10 @@ ionic.views.Scroll = ionic.views.View.inherit({
       e.stopPropagation();
     });
 
-    function shouldIgnorePress(e) {
-      // Don't react if initial down happens on a form element
-      return e.target.tagName.match(IS_INPUT_LIKE_REGEX) ||
-             e.target.isContentEditable ||
-             e.target.tagName.match(IS_EMBEDDED_OBJECT_REGEX) ||
-             e.target.dataset.preventScroll;
-    }
-
-
     if ('ontouchstart' in window) {
 
       container.addEventListener("touchstart", function(e) {
-        if (e.defaultPrevented || shouldIgnorePress(e)) {
+        if ( ionic.tap.ignoreScrollStart(e) ) {
           return;
         }
         self.doTouchStart(e.touches, e.timeStamp);
@@ -3570,7 +3676,7 @@ ionic.views.Scroll = ionic.views.View.inherit({
       var mousedown = false;
 
       container.addEventListener("mousedown", function(e) {
-        if (e.defaultPrevented || shouldIgnorePress(e)) {
+        if ( ionic.tap.ignoreScrollStart(e) ) {
           return;
         }
         self.doTouchStart([{
@@ -4230,7 +4336,7 @@ ionic.views.Scroll = ionic.views.View.inherit({
    * Scroll by the given offset
    *
    * @param left {Number} Scroll x-axis by given offset
-   * @param top {Number} Scroll x-axis by given offset
+   * @param top {Number} Scroll y-axis by given offset
    * @param animate {Boolean} Whether to animate the given change
    */
   scrollBy: function(left, top, animate) {
@@ -5051,39 +5157,40 @@ ionic.views.Scroll = ionic.views.View.inherit({
         return;
       }
 
-      var i, c, childSize;
-      var childNodes = this.el.childNodes;
-      var leftWidth = 0;
-      var rightWidth = 0;
-      var isCountingRightWidth = false;
+      var self = this;
+      //We have to rAF here so all of the elements have time to initialize
+      ionic.requestAnimationFrame(function() {
+        var i, c, childSize;
+        var childNodes = self.el.childNodes;
+        var leftWidth = 0;
+        var rightWidth = 0;
+        var isCountingRightWidth = false;
 
-      // Compute how wide the left children are
-      // Skip all titles (there may still be two titles, one leaving the dom)
-      // Once we encounter a titleEl, realize we are now counting the right-buttons, not left
-      for(i = 0; i < childNodes.length; i++) {
-        c = childNodes[i];
-        if (c.tagName && c.tagName.toLowerCase() == 'h1') {
-          isCountingRightWidth = true;
-          continue;
-        }
+        // Compute how wide the left children are
+        // Skip all titles (there may still be two titles, one leaving the dom)
+        // Once we encounter a titleEl, realize we are now counting the right-buttons, not left
+        for(i = 0; i < childNodes.length; i++) {
+          c = childNodes[i];
+          if (c.tagName && c.tagName.toLowerCase() == 'h1') {
+            isCountingRightWidth = true;
+            continue;
+          }
 
-        childSize = null;
-        if(c.nodeType == 3) {
-          childSize = ionic.DomUtil.getTextBounds(c);
-        } else if(c.nodeType == 1) {
-          childSize = c.getBoundingClientRect();
-        }
-        if(childSize) {
-          if (isCountingRightWidth) {
-            rightWidth += childSize.width;
-          } else {
-            leftWidth += childSize.width;
+          childSize = null;
+          if(c.nodeType == 3) {
+            childSize = ionic.DomUtil.getTextBounds(c).width;
+          } else if(c.nodeType == 1) {
+            childSize = c.offsetWidth;
+          }
+          if(childSize) {
+            if (isCountingRightWidth) {
+              rightWidth += childSize;
+            } else {
+              leftWidth += childSize;
+            }
           }
         }
-      }
 
-      var self = this;
-      ionic.requestAnimationFrame(function() {
         var margin = Math.max(leftWidth, rightWidth) + 10;
 
         // Size and align the header titleEl based on the sizes of the left and
@@ -5139,17 +5246,20 @@ ionic.views.Scroll = ionic.views.View.inherit({
     }
   };
 
-
-
   var SlideDrag = function(opts) {
     this.dragThresholdX = opts.dragThresholdX || 10;
     this.el = opts.el;
+    this.canSwipe = opts.canSwipe;
   };
 
   SlideDrag.prototype = new DragOp();
 
   SlideDrag.prototype.start = function(e) {
     var content, buttons, offsetX, buttonsWidth;
+
+    if (!this.canSwipe()) {
+      return;
+    }
 
     if(e.target.classList.contains(ITEM_CONTENT_CLASS)) {
       content = e.target;
@@ -5175,10 +5285,12 @@ ionic.views.Scroll = ionic.views.View.inherit({
     if(!buttons) {
       return;
     }
+    buttons.classList.remove('invisible');
 
     buttonsWidth = buttons.offsetWidth;
 
     this._currentDrag = {
+      buttons: buttons,
       buttonsWidth: buttonsWidth,
       content: content,
       startOffsetX: offsetX
@@ -5202,7 +5314,10 @@ ionic.views.Scroll = ionic.views.View.inherit({
 
     ionic.requestAnimationFrame(function() {
       lastDrag.content.style[ionic.CSS.TRANSITION] = '';
-      lastDrag.content.style[ionic.CSS.TRANSFORM] = 'translate3d(0, 0, 0)';
+      lastDrag.content.style[ionic.CSS.TRANSFORM] = '';
+      setTimeout(function() {
+        lastDrag.buttons && lastDrag.buttons.classList.add('invisible');
+      }, 250);
     });
   };
 
@@ -5269,6 +5384,10 @@ ionic.views.Scroll = ionic.views.View.inherit({
     ionic.requestAnimationFrame(function() {
       if(restingPoint === 0) {
         _this._currentDrag.content.style[ionic.CSS.TRANSFORM] = '';
+        var buttons = _this._currentDrag.buttons;
+        setTimeout(function() {
+          buttons && buttons.classList.add('invisible');
+        }, 250);
       } else {
         _this._currentDrag.content.style[ionic.CSS.TRANSFORM] = 'translate3d(' + restingPoint + 'px, 0, 0)';
       }
@@ -5295,40 +5414,29 @@ ionic.views.Scroll = ionic.views.View.inherit({
   ReorderDrag.prototype = new DragOp();
 
   ReorderDrag.prototype._moveElement = function(e) {
-    var y = (e.gesture.center.pageY - this._currentDrag.elementHeight/2);
+    var y = e.gesture.center.pageY - this._currentDrag.elementHeight + this._currentDrag.scrollDelta;
     this.el.style[ionic.CSS.TRANSFORM] = 'translate3d(0, '+y+'px, 0)';
   };
 
   ReorderDrag.prototype.start = function(e) {
     var content;
 
-
-    // Grab the starting Y point for the item
-    var offsetY = this.el.offsetTop;//parseFloat(this.el.style[ionic.CSS.TRANSFORM].replace('translate3d(', '').split(',')[1]) || 0;
-
     var startIndex = ionic.DomUtil.getChildIndex(this.el, this.el.nodeName.toLowerCase());
-    var elementHeight = this.el.offsetHeight;
+    var elementHeight = this.el.scrollHeight;
     var placeholder = this.el.cloneNode(true);
-
-    // If we have a scroll pane, move our draggable element outside of it
-    // We do this because when we drag our element down below the edge of the page
-    // and scroll the scroll-pane, if the element is *part* of the scroll-pane,
-    // it will scroll 'with' the scroll-pane's contents and change position.
-    var appendToElement = (this.scrollEl || this.el).parentNode;
 
     placeholder.classList.add(ITEM_PLACEHOLDER_CLASS);
 
     this.el.parentNode.insertBefore(placeholder, this.el);
     this.el.classList.add(ITEM_REORDERING_CLASS);
 
-    appendToElement.parentNode.appendChild(this.el);
-
     this._currentDrag = {
       elementHeight: elementHeight,
       startIndex: startIndex,
       placeholder: placeholder,
       scrollHeight: scroll,
-      list: placeholder.parentNode
+      list: placeholder.parentNode,
+      scrollDelta: 0
     };
 
     this._moveElement(e);
@@ -5355,10 +5463,12 @@ ionic.views.Scroll = ionic.views.View.inherit({
 
       if (e.gesture.deltaY < 0 && pixelsPastTop > 0 && scrollY > 0) {
         this.scrollView.scrollBy(null, -pixelsPastTop);
+        this._currentDrag.scrollDelta -= pixelsPastTop;
       }
       if (e.gesture.deltaY > 0 && pixelsPastBottom > 0) {
         if (scrollY < this.scrollView.getScrollMax().top) {
           this.scrollView.scrollBy(null, pixelsPastBottom);
+          this._currentDrag.scrollDelta += pixelsPastBottom;
         }
       }
     }
@@ -5380,8 +5490,12 @@ ionic.views.Scroll = ionic.views.View.inherit({
 
   // When an item is dragged, we need to reorder any items for sorting purposes
   ReorderDrag.prototype._reorderItems = function() {
+    var self = this;
     var placeholder = this._currentDrag.placeholder;
-    var siblings = Array.prototype.slice.call(this._currentDrag.placeholder.parentNode.children);
+    var siblings = Array.prototype.slice.call(this._currentDrag.placeholder.parentNode.children)
+      .filter(function(el) {
+        return el !== self.el;
+      });
 
     var index = siblings.indexOf(this._currentDrag.placeholder);
     var topSibling = siblings[Math.max(0, index - 1)];
@@ -5433,7 +5547,9 @@ ionic.views.Scroll = ionic.views.View.inherit({
         onReorder: function(el, oldIndex, newIndex) {},
         virtualRemoveThreshold: -200,
         virtualAddThreshold: 200,
-        canSwipe: false
+        canSwipe: function() {
+          return true;
+        }
       }, opts);
 
       ionic.extend(this, opts);
@@ -5589,7 +5705,7 @@ ionic.views.Scroll = ionic.views.View.inherit({
         // Make sure this is an item with buttons
         var item = this._getItem(e.target);
         if(item && item.querySelector('.item-options')) {
-          this._dragOp = new SlideDrag({ el: this.el });
+          this._dragOp = new SlideDrag({ el: this.el, canSwipe: this.canSwipe });
           this._dragOp.start(e);
           e.preventDefault();
         }
@@ -5623,10 +5739,6 @@ ionic.views.Scroll = ionic.views.View.inherit({
     _handleDrag: function(e) {
       var _this = this, content, buttons;
 
-      if (!this.canSwipe) {
-        return;
-      }
-
       if(Math.abs(e.gesture.deltaY) > 5) {
         this._didDragUpOrDown = true;
       }
@@ -5647,63 +5759,6 @@ ionic.views.Scroll = ionic.views.View.inherit({
       this._dragOp.drag(e);
     }
 
-  });
-
-})(ionic);
-
-(function(ionic) {
-'use strict';
-  /**
-   * Loading
-   *
-   * The Loading is an overlay that can be used to indicate
-   * activity while blocking user interaction.
-   */
-  ionic.views.Loading = ionic.views.View.inherit({
-    initialize: function(opts) {
-      var _this = this;
-
-      this.el = opts.el;
-
-      this.maxWidth = opts.maxWidth || 200;
-
-      this.showDelay = opts.showDelay || 0;
-
-      this._loadingBox = this.el.querySelector('.loading') || this.el;
-    },
-    show: function() {
-      var _this = this;
-
-      if(this._loadingBox) {
-        var lb = _this._loadingBox;
-
-        var width = Math.min(_this.maxWidth, Math.max(window.outerWidth - 40, lb.offsetWidth));
-
-        lb.style.width = width + 'px';
-
-        lb.style.marginLeft = (-lb.offsetWidth) / 2 + 'px';
-        lb.style.marginTop = (-lb.offsetHeight) / 2 + 'px';
-
-        // Wait 'showDelay' ms before showing the loading screen
-        this._showDelayTimeout = window.setTimeout(function() {
-          _this.el.classList.add('active');
-        }, _this.showDelay);
-      }
-    },
-    hide: function() {
-      // Force a reflow so the animation will actually run
-      this.el.offsetWidth;
-
-      // Prevent unnecessary 'show' after 'hide' has already been called
-      window.clearTimeout(this._showDelayTimeout);
-
-      this.el.classList.remove('active');
-    },
-    setContent: function(html) {
-      if (this._loadingBox) {
-        this._loadingBox.innerHTML = html || '';
-      }
-    }
   });
 
 })(ionic);
@@ -5744,60 +5799,6 @@ ionic.views.Scroll = ionic.views.View.inherit({
             inputs[i].blur && inputs[i].blur();
           }
         });
-      }
-    }
-  });
-
-})(ionic);
-
-(function(ionic) {
-'use strict';
-
-  ionic.views.NavBar = ionic.views.View.inherit({
-    initialize: function(opts) {
-      this.el = opts.el;
-
-      this._titleEl = this.el.querySelector('.title');
-
-      if(opts.hidden) {
-        this.hide();
-      }
-    },
-    hide: function() {
-      this.el.classList.add('hidden');
-    },
-    show: function() {
-      this.el.classList.remove('hidden');
-    },
-    shouldGoBack: function() {},
-
-    setTitle: function(title) {
-      if(!this._titleEl) {
-        return;
-      }
-      this._titleEl.innerHTML = title;
-    },
-
-    showBackButton: function(shouldShow) {
-      var _this = this;
-
-      if(!this._currentBackButton) {
-        var back = document.createElement('a');
-        back.className = 'button back';
-        back.innerHTML = 'Back';
-
-        this._currentBackButton = back;
-        this._currentBackButton.onclick = function(event) {
-          _this.shouldGoBack && _this.shouldGoBack();
-        };
-      }
-
-      if(shouldShow && !this._currentBackButton.parentNode) {
-        // Prepend the back button
-        this.el.insertBefore(this._currentBackButton, this.el.firstChild);
-      } else if(!shouldShow && this._currentBackButton.parentNode) {
-        // Remove the back button if it's there
-        this._currentBackButton.parentNode.removeChild(this._currentBackButton);
       }
     }
   });
@@ -6466,231 +6467,6 @@ ionic.views.Slider = ionic.views.View.inherit({
 (function(ionic) {
 'use strict';
 
-ionic.views.TabBarItem = ionic.views.View.inherit({
-  initialize: function(el) {
-    this.el = el;
-
-    this._buildItem();
-  },
-
-  // Factory for creating an item from a given javascript object
-  create: function(itemData) {
-    var item = document.createElement('a');
-    item.className = 'tab-item';
-
-    // If there is an icon, add the icon element
-    if(itemData.icon) {
-      var icon = document.createElement('i');
-      icon.className = itemData.icon;
-      item.appendChild(icon);
-    }
-
-    // If there is a badge, add the badge element
-    if(itemData.badge) {
-      var badge = document.createElement('i');
-      badge.className = 'badge';
-      badge.innerHTML = itemData.badge;
-      item.appendChild(badge);
-      item.className = 'tab-item has-badge';
-    }
-
-    item.appendChild(document.createTextNode(itemData.title));
-
-    return new ionic.views.TabBarItem(item);
-  },
-
-  _buildItem: function() {
-    var _this = this, child, children = Array.prototype.slice.call(this.el.children);
-
-    for(var i = 0, j = children.length; i < j; i++) {
-      child = children[i];
-
-      // Test if this is a "i" tag with icon in the class name
-      // TODO: This heuristic might not be sufficient
-      if(child.tagName.toLowerCase() == 'i' && /icon/.test(child.className)) {
-        this.icon = child.className;
-      }
-
-      // Test if this is a "i" tag with badge in the class name
-      // TODO: This heuristic might not be sufficient
-      if(child.tagName.toLowerCase() == 'i' && /badge/.test(child.className)) {
-        this.badge = child.textContent.trim();
-      }
-    }
-
-    this.title = '';
-    for(i = 0, j = this.el.childNodes.length; i < j; i++) {
-      child = this.el.childNodes[i];
-
-      if (child.nodeName === "#text") {
-        this.title += child.nodeValue.trim();
-      }
-    }
-
-    this._tapHandler = function(e) {
-      _this.onTap && _this.onTap(e);
-    };
-
-    ionic.on('tap', this._tapHandler, this.el);
-  },
-  onTap: function(e) {
-  },
-
-  // Remove the event listeners from this object
-  destroy: function() {
-    ionic.off('tap', this._tapHandler, this.el);
-  },
-
-  getIcon: function() {
-    return this.icon;
-  },
-
-  getTitle: function() {
-    return this.title;
-  },
-
-  getBadge: function() {
-    return this.badge;
-  },
-
-  setSelected: function(isSelected) {
-    this.isSelected = isSelected;
-    if(isSelected) {
-      this.el.classList.add('active');
-    } else {
-      this.el.classList.remove('active');
-    }
-  }
-});
-
-ionic.views.TabBar = ionic.views.View.inherit({
-  initialize: function(opts) {
-    this.el = opts.el;
-     
-    this.items = [];
-
-    this._buildItems();
-  },
-  // get all the items for the TabBar
-  getItems: function() {
-    return this.items;
-  },
-
-  // Add an item to the tab bar
-  addItem: function(item) {
-    // Create a new TabItem
-    var tabItem = ionic.views.TabBarItem.prototype.create(item);
-
-    this.appendItemElement(tabItem);
-
-    this.items.push(tabItem);
-    this._bindEventsOnItem(tabItem);
-  },
-
-  appendItemElement: function(item) {
-    if(!this.el) {
-      return;
-    }
-    this.el.appendChild(item.el);
-  },
-
-  // Remove an item from the tab bar
-  removeItem: function(index) {
-    var item = this.items[index];
-    if(!item) {
-      return;
-    }
-    item.onTap = undefined;
-    item.destroy();
-  },
-
-  _bindEventsOnItem: function(item) {
-    var _this = this;
-
-    if(!this._itemTapHandler) {
-      this._itemTapHandler = function(e) {
-        //_this.selectItem(this);
-        _this.trySelectItem(this);
-      };
-    }
-    item.onTap = this._itemTapHandler;
-  },
-
-  // Get the currently selected item
-  getSelectedItem: function() {
-    return this.selectedItem;
-  },
-
-  // Set the currently selected item by index
-  setSelectedItem: function(index) {
-    this.selectedItem = this.items[index];
-
-    // Deselect all
-    for(var i = 0, j = this.items.length; i < j; i += 1) {
-      this.items[i].setSelected(false);
-    }
-
-    // Select the new item
-    if(this.selectedItem) {
-      this.selectedItem.setSelected(true);
-      //this.onTabSelected && this.onTabSelected(this.selectedItem, index);
-    }
-  },
-
-  // Select the given item assuming we can find it in our
-  // item list.
-  selectItem: function(item) {
-    for(var i = 0, j = this.items.length; i < j; i += 1) {
-      if(this.items[i] == item) {
-        this.setSelectedItem(i);
-        return;
-      }
-    }
-  },
-
-  // Try to select a given item. This triggers an event such
-  // that the view controller managing this tab bar can decide
-  // whether to select the item or cancel it.
-  trySelectItem: function(item) {
-    for(var i = 0, j = this.items.length; i < j; i += 1) {
-      if(this.items[i] == item) {
-        this.tryTabSelect && this.tryTabSelect(i);
-        return;
-      }
-    }
-  },
-
-  // Build the initial items list from the given DOM node.
-  _buildItems: function() {
-
-    var item, items = Array.prototype.slice.call(this.el.children);
-
-    for(var i = 0, j = items.length; i < j; i += 1) {
-      item =  new ionic.views.TabBarItem(items[i]);
-      this.items[i] = item;
-      this._bindEventsOnItem(item);
-    }
-  
-    if(this.items.length > 0) {
-      this.selectedItem = this.items[0];
-    }
-
-  },
-
-  // Destroy this tab bar
-  destroy: function() {
-    for(var i = 0, j = this.items.length; i < j; i += 1) {
-      this.items[i].destroy();
-    }
-    this.items.length = 0;
-  }
-});
-
-})(window.ionic);
-
-(function(ionic) {
-'use strict';
-
   ionic.views.Toggle = ionic.views.View.inherit({
     initialize: function(opts) {
       var self = this;
@@ -6854,159 +6630,6 @@ ionic.views.TabBar = ionic.views.View.inherit({
 (function(ionic) {
 'use strict';
 
-/**
- * The NavController makes it easy to have a stack
- * of views or screens that can be pushed and popped
- * for a dynamic navigation flow. This API is modelled
- * off of the UINavigationController in iOS.
- *
- * The NavController can drive a nav bar to show a back button
- * if the stack can be poppped to go back to the last view, and
- * it will handle updating the title of the nav bar and processing animations.
- */
-ionic.controllers.NavController = ionic.controllers.ViewController.inherit({
-  initialize: function(opts) {
-    var _this = this;
-
-    this.navBar = opts.navBar;
-    this.content = opts.content;
-    this.controllers = opts.controllers || [];
-
-    this._updateNavBar();
-
-    // TODO: Is this the best way?
-    this.navBar.shouldGoBack = function() {
-      _this.pop();
-    };
-  },
-
-  /**
-   * @return {array} the array of controllers on the stack.
-   */
-  getControllers: function() {
-    return this.controllers;
-  },
-
-  /**
-   * @return {object} the controller at the top of the stack.
-   */
-  getTopController: function() {
-    return this.controllers[this.controllers.length-1];
-  },
-
-  /**
-   * Push a new controller onto the navigation stack. The new controller
-   * will automatically become the new visible view.
-   *
-   * @param {object} controller the controller to push on the stack.
-   */
-  push: function(controller) {
-    var last = this.controllers[this.controllers.length - 1];
-
-    this.controllers.push(controller);
-
-    // Indicate we are switching controllers
-    var shouldSwitch = this.switchingController && this.switchingController(controller) || true;
-
-    // Return if navigation cancelled
-    if(shouldSwitch === false)
-      return;
-
-    // Actually switch the active controllers
-    if(last) {
-      last.isVisible = false;
-      last.visibilityChanged && last.visibilityChanged('push');
-    }
-
-    // Grab the top controller on the stack
-    var next = this.controllers[this.controllers.length - 1];
-
-    next.isVisible = true;
-    // Trigger visibility change, but send 'first' if this is the first page
-    next.visibilityChanged && next.visibilityChanged(last ? 'push' : 'first');
-
-    this._updateNavBar();
-
-    return controller;
-  },
-
-  /**
-   * Pop the top controller off the stack, and show the last one. This is the
-   * "back" operation.
-   *
-   * @return {object} the last popped controller
-   */
-  pop: function() {
-    var next, last;
-
-    // Make sure we keep one on the stack at all times
-    if(this.controllers.length < 2) {
-      return;
-    }
-
-    // Grab the controller behind the top one on the stack
-    last = this.controllers.pop();
-    if(last) {
-      last.isVisible = false;
-      last.visibilityChanged && last.visibilityChanged('pop');
-    }
-    
-    // Remove the old one
-    //last && last.detach();
-
-    next = this.controllers[this.controllers.length - 1];
-
-    // TODO: No DOM stuff here
-    //this.content.el.appendChild(next.el);
-    next.isVisible = true;
-    next.visibilityChanged && next.visibilityChanged('pop');
-
-    // Switch to it (TODO: Animate or such things here)
-
-    this._updateNavBar();
-
-    return last;
-  },
-
-  /**
-   * Show the NavBar (if any)
-   */
-  showNavBar: function() {
-    if(this.navBar) {
-      this.navBar.show();
-    }
-  },
-
-  /**
-   * Hide the NavBar (if any)
-   */
-  hideNavBar: function() {
-    if(this.navBar) {
-      this.navBar.hide();
-    }
-  },
-
-  // Update the nav bar after a push or pop
-  _updateNavBar: function() {
-    if(!this.getTopController() || !this.navBar) {
-      return;
-    }
-
-    this.navBar.setTitle(this.getTopController().title);
-
-    if(this.controllers.length > 1) {
-      this.navBar.showBackButton(true);
-    } else {
-      this.navBar.showBackButton(false);
-    }
-  }
-});
-
-})(window.ionic);
-
-(function(ionic) {
-'use strict';
-
   /**
    * The SideMenuController is a controller with a left and/or right menu that
    * can be slid out and toggled. Seen on many an app.
@@ -7123,7 +6746,7 @@ ionic.controllers.NavController = ionic.controllers.ViewController.inherit({
     },
 
     isOpen: function() {
-      return this.getOpenRatio() == 1;
+      return this.getOpenAmount() !== 0;
     },
 
     /**
@@ -7310,149 +6933,5 @@ ionic.controllers.NavController = ionic.controllers.ViewController.inherit({
   });
 
 })(ionic);
-
-(function(ionic) {
-'use strict';
-
-/**
- * The TabBarController handles a set of view controllers powered by a tab strip
- * at the bottom (or possibly top) of a screen.
- *
- * The API here is somewhat modelled off of UITabController in the sense that the
- * controllers actually define what the tab will look like (title, icon, etc.).
- *
- * Tabs shouldn't be interacted with through your own code. Instead, use the controller
- * methods which will power the tab bar.
- */
-ionic.controllers.TabBarController = ionic.controllers.ViewController.inherit({
-  initialize: function(options) {
-    this.tabBar = options.tabBar;
-
-    this._bindEvents();
-
-    this.controllers = [];
-
-    var controllers = options.controllers || [];
-
-    for(var i = 0; i < controllers.length; i++) {
-      this.addController(controllers[i]);
-    }
-
-    // Bind or set our tabWillChange callback
-    this.controllerWillChange = options.controllerWillChange || function(controller) {};
-    this.controllerChanged = options.controllerChanged || function(controller) {};
-
-    // Try to select the first controller if we have one
-    this.setSelectedController(0);
-  },
-  // Start listening for events on our tab bar
-  _bindEvents: function() {
-    var _this = this;
-
-    this.tabBar.tryTabSelect = function(index) {
-      _this.setSelectedController(index);
-    };
-  },
-
-
-  selectController: function(index) {
-    var shouldChange = true;
-
-    // Check if we should switch to this tab. This lets the app
-    // cancel tab switches if the context isn't right, for example.
-    if(this.controllerWillChange) {
-      if(this.controllerWillChange(this.controllers[index], index) === false) {
-        shouldChange = false;
-      }
-    }
-
-    if(shouldChange) {
-      this.setSelectedController(index);
-    }
-  },
-
-  // Force the selection of a controller at the given index
-  setSelectedController: function(index) {
-    if(index >= this.controllers.length) {
-      return;
-    }
-    var lastController = this.selectedController;
-    var lastIndex = this.selectedIndex;
-
-    this.selectedController = this.controllers[index];
-    this.selectedIndex = index;
-
-    this._showController(index);
-    this.tabBar.setSelectedItem(index);
-
-    this.controllerChanged && this.controllerChanged(lastController, lastIndex, this.selectedController, this.selectedIndex);
-  },
-
-  _showController: function(index) {
-    var c;
-
-    for(var i = 0, j = this.controllers.length; i < j; i ++) {
-      c = this.controllers[i];
-      //c.detach && c.detach();
-      c.isVisible = false;
-      c.visibilityChanged && c.visibilityChanged();
-    }
-
-    c = this.controllers[index];
-    //c.attach && c.attach();
-    c.isVisible = true;
-    c.visibilityChanged && c.visibilityChanged();
-  },
-
-  _clearSelected: function() {
-    this.selectedController = null;
-    this.selectedIndex = -1;
-  },
-
-  // Return the tab at the given index
-  getController: function(index) {
-    return this.controllers[index];
-  },
-
-  // Return the current tab list
-  getControllers: function() {
-    return this.controllers;
-  },
-
-  // Get the currently selected controller
-  getSelectedController: function() {
-    return this.selectedController;
-  },
-
-  // Get the index of the currently selected controller
-  getSelectedControllerIndex: function() {
-    return this.selectedIndex;
-  },
-
-  // Add a tab
-  addController: function(controller) {
-    this.controllers.push(controller);
-
-    this.tabBar.addItem({
-      title: controller.title,
-      icon: controller.icon,
-      badge: controller.badge
-    });
-
-    // If we don't have a selected controller yet, select the first one.
-    if(!this.selectedController) {
-      this.setSelectedController(0);
-    }
-  },
-
-  // Set the tabs and select the first
-  setControllers: function(controllers) {
-    this.controllers = controllers;
-    this._clearSelected();
-    this.selectController(0);
-  },
-});
-
-})(window.ionic);
 
 })();
