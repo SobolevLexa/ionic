@@ -888,7 +888,7 @@ function($rootScope, $document, $compile, $timeout, $ionicPlatform, $ionicTempla
       return $timeout(function(){
         $document[0].body.classList.remove('modal-open');
         self.el.classList.add('hide');
-      }, 350);
+      }, 500);
     },
 
     /**
@@ -1231,8 +1231,6 @@ var POPUP_TPL =
     '</div>' +
   '</div>';
 
-var POPUP_CONTENT_DEPRECATED = '$ionicPopup options.content has been deprecated. Use options.template instead.';
-
 /**
  * @ngdoc service
  * @name $ionicPopup
@@ -1490,8 +1488,6 @@ function($animate, $ionicTemplateLoader, $ionicBackdrop, $log, $q, $timeout, $ro
       buttons: [],
     }, options || {});
 
-    deprecated.field(POPUP_CONTENT_DEPRECATED, $log.warn, options, 'content', options.content);
-
     var popupPromise = $ionicTemplateLoader.compile({
       template: POPUP_TPL,
       scope: options.scope && options.scope.$new(),
@@ -1544,7 +1540,7 @@ function($animate, $ionicTemplateLoader, $ionicBackdrop, $log, $q, $timeout, $ro
           self.element.removeClass('popup-hidden');
           self.element.addClass('popup-showing active');
           ionic.DomUtil.centerElementByMarginTwice(self.element[0]);
-          focusLastButton(self.element);
+          focusInputOrButton(self.element);
         });
       };
       self.hide = function(callback) {
@@ -1627,11 +1623,14 @@ function($animate, $ionicTemplateLoader, $ionicBackdrop, $log, $q, $timeout, $ro
     return resultPromise;
   }
 
-  function focusLastButton(element) {
-    var buttons = element[0].querySelectorAll('button');
-    var lastButton = buttons[buttons.length-1];
-    if(lastButton) {
-      lastButton.focus();
+  function focusInputOrButton(element) {
+    var inputs = element[0].querySelectorAll('input');
+    if (!inputs.length) {
+      inputs = element[0].querySelectorAll('button');
+    }
+    var last = inputs[inputs.length-1];
+    if(last) {
+      last.focus();
     }
   }
 
@@ -1671,7 +1670,7 @@ function($animate, $ionicTemplateLoader, $ionicBackdrop, $log, $q, $timeout, $ro
       buttons: [{
         text: opts.cancelText || 'Cancel',
         type: opts.cancelType|| 'button-default',
-        onTap: function(e) { e.preventDefault(); }
+        onTap: function(e) {}
       }, {
         text: opts.okText || 'OK',
         type: opts.okType || 'button-positive',
@@ -3556,6 +3555,7 @@ function($timeout, $controller, $ionicBind) {
     restrict: 'E',
     require: '^?ionNavView',
     scope: true,
+    priority: 800,
     compile: function(element, attr) {
       var innerElement;
 
@@ -3628,7 +3628,7 @@ function($timeout, $controller, $ionicBind) {
               scrollbarY: $scope.$eval($scope.scrollbarY) !== false,
               scrollingX: $scope.$eval($scope.hasScrollX) === true,
               scrollingY: $scope.$eval($scope.hasScrollY) !== false,
-              scrollEventInterval: parseInt($scope.scrollEventInterval, 10) || 20,
+              scrollEventInterval: parseInt($scope.scrollEventInterval, 10) || 10,
               scrollingComplete: function() {
                 $scope.$onScrollComplete({
                   scrollTop: this.__scrollTop,
@@ -3828,6 +3828,10 @@ function headerFooterBarDirective(isHeader) {
  *       $scope.$broadcast('scroll.infiniteScrollComplete');
  *     });
  *   };
+ * 
+ *   $scope.$on('stateChangeSuccess', function() {
+ *     $scope.loadMore();
+ *   });
  * }
  * ```
  *
@@ -3885,13 +3889,24 @@ IonicModule
         return angular.isDefined($attrs.icon) ? $attrs.icon : 'ion-loading-d';
       };
 
-      $scope.$on('scroll.infiniteScrollComplete', function() {
+      var onInfinite = function() {
+        $element[0].classList.add('active');
+        infiniteScrollCtrl.isLoading = true;
+        $scope.$parent && $scope.$parent.$apply($attrs.onInfinite || '');
+      }
+
+      var finishInfiniteScroll = function() {
         $element[0].classList.remove('active');
         $timeout(function() {
           scrollView.resize();
         }, 0, false);
         infiniteScrollCtrl.isLoading = false;
+      };
+
+      $scope.$on('scroll.infiniteScrollComplete', function() {
+        finishInfiniteScroll();
       });
+
       $scope.$on('$destroy', function() {
         scrollCtrl.$element.off('scroll', checkBounds);
       });
@@ -3908,11 +3923,13 @@ IonicModule
         var scrollValues = scrollView.getValues();
         var maxScroll = infiniteScrollCtrl.getMaxScroll();
 
+        if(maxScroll.top === 0) {
+          return;
+        }
+             
         if ((maxScroll.left !== -1 && scrollValues.left >= maxScroll.left) ||
             (maxScroll.top !== -1 && scrollValues.top >= maxScroll.top)) {
-          $element[0].classList.add('active');
-          infiniteScrollCtrl.isLoading = true;
-          $scope.$parent && $scope.$parent.$apply($attrs.onInfinite || '');
+          onInfinite();
         }
       }
     }
@@ -4017,10 +4034,10 @@ var ITEM_TPL_DELETE_BUTTON =
 * ```
 */
 IonicModule
-.directive('ionDeleteButton', [function() {
+.directive('ionDeleteButton', ['$animate', function($animate) {
   return {
     restrict: 'E',
-    require: '^ionItem',
+    require: ['^ionItem', '^ionList'],
     //Run before anything else, so we can move it before other directives process
     //its location (eg ngIf relies on the location of the directive in the dom)
     priority: Number.MAX_VALUE,
@@ -4028,10 +4045,16 @@ IonicModule
       //Add the classes we need during the compile phase, so that they stay
       //even if something else like ngIf removes the element and re-addss it
       $attr.$set('class', ($attr.class || '') + ' button icon button-icon', true);
-      return function($scope, $element, $attr, itemCtrl) {
+      return function($scope, $element, $attr, ctrls) {
+        var itemCtrl = ctrls[0];
+        var listCtrl = ctrls[1];
         var container = angular.element(ITEM_TPL_DELETE_BUTTON);
         container.append($element);
         itemCtrl.$element.append(container).addClass('item-left-editable');
+
+        if (listCtrl.showDelete()) {
+          $animate.removeClass(container, 'ng-hide');
+        }
       };
     }
   };
@@ -4133,15 +4156,17 @@ var ITEM_TPL_REORDER_BUTTON =
 * Parameters given: $fromIndex, $toIndex.
 */
 IonicModule
-.directive('ionReorderButton', [function() {
+.directive('ionReorderButton', ['$animate', function($animate) {
   return {
     restrict: 'E',
-    require: '^ionItem',
+    require: ['^ionItem', '^ionList'],
     priority: Number.MAX_VALUE,
     compile: function($element, $attr) {
       $attr.$set('class', ($attr.class || '') + ' button icon button-icon', true);
       $element[0].setAttribute('data-prevent-scroll', true);
-      return function($scope, $element, $attr, itemCtrl) {
+      return function($scope, $element, $attr, ctrls) {
+        var itemCtrl = ctrls[0];
+        var listCtrl = ctrls[1];
         $scope.$onReorder = function(oldIndex, newIndex) {
           $scope.$eval($attr.onReorder, {
             $fromIndex: oldIndex,
@@ -4152,6 +4177,10 @@ IonicModule
         var container = angular.element(ITEM_TPL_REORDER_BUTTON);
         container.append($element);
         itemCtrl.$element.append(container).addClass('item-right-editable');
+
+        if (listCtrl.showReorder()) {
+          $animate.removeClass(container, 'ng-hide');
+        }
       };
     }
   };
@@ -4474,9 +4503,8 @@ IonicModule
  */
 IonicModule
 .directive('ionNavBackButton', [
-  '$ionicNgClick',
   '$animate',
-function($ionicNgClick, $animate) {
+function($animate) {
   return {
     restrict: 'E',
     require: '^ionNavBar',
@@ -4485,7 +4513,11 @@ function($ionicNgClick, $animate) {
       return function($scope, $element, $attr, navBarCtrl) {
         if (!$attr.ngClick) {
           $scope.$navBack = navBarCtrl.back;
-          $ionicNgClick($scope, $element, '$navBack($event)');
+          $element.on('click', function(event){
+            $scope.$apply(function() {
+              $scope.$navBack(event);
+            });
+          });
         }
 
         //If the current viewstate does not allow a back button,
@@ -4938,9 +4970,6 @@ function( $ionicViewService,   $state,   $compile,   $controller,   $animate) {
 }]);
 
 
-// Similar to Angular's ngTouch, however it uses Ionic's tap detection
-// and click simulation. ngClick
-
 IonicModule
 
 .config(['$provide', function($provide) {
@@ -4955,10 +4984,6 @@ IonicModule
  * @private
  */
 .factory('$ionicNgClick', ['$parse', function($parse) {
-  function onRelease(e) {
-    // wire this up to Ionic's tap/click simulation
-    ionic.tap.simulateClick(e.target, e);
-  }
   return function(scope, element, clickExpr) {
     var clickHandler = $parse(clickExpr);
 
@@ -4968,15 +4993,9 @@ IonicModule
       });
     });
 
-    ionic.on("release", onRelease, element[0]);
-
     // Hack for iOS Safari's benefit. It goes searching for onclick handlers and is liable to click
     // something else nearby.
     element.onclick = function(event) { };
-
-    scope.$on('$destroy', function () {
-      ionic.off("release", onRelease, element[0]);
-    });
   };
 }])
 
@@ -5131,9 +5150,9 @@ IonicModule
     '<div class="scroll-refresher">' +
       '<div class="ionic-refresher-content">' +
         '<i class="icon {{pullingIcon}} icon-pulling"></i>' +
-        '<div class="text-pulling" ng-bind-html="pullingText || \'&nbsp;\'"></div>' +
+        '<div class="text-pulling" ng-bind-html="pullingText"></div>' +
         '<i class="icon {{refreshingIcon}} icon-refreshing"></i>' +
-        '<div class="text-refreshing" ng-bind-html="refreshingText || \'&nbsp;\'"></div>' +
+        '<div class="text-refreshing" ng-bind-html="refreshingText"></div>' +
       '</div>' +
     '</div>',
     compile: function($element, $attrs) {
@@ -5819,7 +5838,7 @@ function($rootScope, $animate, $ionicBind, $compile) {
 }]);
 
 IonicModule
-.directive('ionTabNav', ['$ionicNgClick', function($ionicNgClick) {
+.directive('ionTabNav', [function() {
   return {
     restrict: 'E',
     replace: true,
@@ -5853,7 +5872,11 @@ IonicModule
           tabsCtrl.select(tabCtrl.$scope, true);
         };
         if (!$attrs.ngClick) {
-          $ionicNgClick($scope, $element, 'selectTab($event)');
+          $element.on('click', function(event) {
+            $scope.$apply(function() {
+              $scope.selectTab(event);
+            });
+          });
         }
 
         $scope.getIconOn = function() {
@@ -6038,72 +6061,6 @@ function($ionicGesture, $timeout) {
 
   };
 }]);
-
-
-// Similar to Angular's ngTouch, however it uses Ionic's tap detection
-// and click simulation. ngClick
-
-(function(angular, ionic) {'use strict';
-
-angular.module('ionic.ui.touch', [])
-
-  .config(['$provide', function($provide) {
-    $provide.decorator('ngClickDirective', ['$delegate', function($delegate) {
-      // drop the default ngClick directive
-      $delegate.shift();
-      return $delegate;
-    }]);
-  }])
-
-  /**
-   * @private
-   */
-  .factory('$ionicNgClick', ['$parse', function($parse) {
-    function onRelease(e) {
-      // wire this up to Ionic's tap/click simulation
-      ionic.tap.simulateClick(e.target, e);
-    }
-    return function(scope, element, clickExpr) {
-      var clickHandler = $parse(clickExpr);
-
-      element.on('click', function(event) {
-        scope.$apply(function() {
-          clickHandler(scope, {$event: (event)});
-        });
-      });
-
-      ionic.on("release", onRelease, element[0]);
-
-      // Hack for iOS Safari's benefit. It goes searching for onclick handlers and is liable to click
-      // something else nearby.
-      element.onclick = function(event) { };
-
-      scope.$on('$destroy', function () {
-        ionic.off("release", onRelease, element[0]);
-      });
-    };
-  }])
-
-  .directive('ngClick', ['$ionicNgClick', function($ionicNgClick) {
-    return function(scope, element, attr) {
-      $ionicNgClick(scope, element, attr.ngClick);
-    };
-  }])
-
-  .directive('ionStopEvent', function () {
-    function stopEvent(e) {
-      e.stopPropagation();
-    }
-    return {
-      restrict: 'A',
-      link: function (scope, element, attr) {
-        element.bind(attr.ionStopEvent, stopEvent);
-      }
-    };
-  });
-
-
-})(window.angular, window.ionic);
 
 /**
  * @ngdoc directive
