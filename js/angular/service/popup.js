@@ -12,8 +12,6 @@ var POPUP_TPL =
     '</div>' +
   '</div>';
 
-var POPUP_CONTENT_DEPRECATED = '$ionicPopup options.content has been deprecated. Use options.template instead.';
-
 /**
  * @ngdoc service
  * @name $ionicPopup
@@ -271,8 +269,6 @@ function($animate, $ionicTemplateLoader, $ionicBackdrop, $log, $q, $timeout, $ro
       buttons: [],
     }, options || {});
 
-    deprecated.field(POPUP_CONTENT_DEPRECATED, $log.warn, options, 'content', options.content);
-
     var popupPromise = $ionicTemplateLoader.compile({
       template: POPUP_TPL,
       scope: options.scope && options.scope.$new(),
@@ -325,7 +321,7 @@ function($animate, $ionicTemplateLoader, $ionicBackdrop, $log, $q, $timeout, $ro
           self.element.removeClass('popup-hidden');
           self.element.addClass('popup-showing active');
           ionic.DomUtil.centerElementByMarginTwice(self.element[0]);
-          focusLastButton(self.element);
+          focusInputOrButton(self.element);
         });
       };
       self.hide = function(callback) {
@@ -408,11 +404,14 @@ function($animate, $ionicTemplateLoader, $ionicBackdrop, $log, $q, $timeout, $ro
     return resultPromise;
   }
 
-  function focusLastButton(element) {
-    var buttons = element[0].querySelectorAll('button');
-    var lastButton = buttons[buttons.length-1];
-    if(lastButton) {
-      lastButton.focus();
+  function focusInputOrButton(element) {
+    var inputs = element[0].querySelectorAll('input');
+    if (!inputs.length) {
+      inputs = element[0].querySelectorAll('button');
+    }
+    var last = inputs[inputs.length-1];
+    if(last) {
+      last.focus();
     }
   }
 
@@ -452,7 +451,7 @@ function($animate, $ionicTemplateLoader, $ionicBackdrop, $log, $q, $timeout, $ro
       buttons: [{
         text: opts.cancelText || 'Cancel',
         type: opts.cancelType|| 'button-default',
-        onTap: function(e) { e.preventDefault(); }
+        onTap: function(e) {}
       }, {
         text: opts.okText || 'OK',
         type: opts.okType || 'button-positive',
