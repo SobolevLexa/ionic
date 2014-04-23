@@ -33443,6 +33443,7 @@ function($animate, $ionicTemplateLoader, $ionicBackdrop, $log, $q, $timeout, $ro
       scope: null,
       title: '',
       buttons: [],
+      mainClass: '',
     }, options || {});
 
     var popupPromise = $ionicTemplateLoader.compile({
@@ -33476,6 +33477,7 @@ function($animate, $ionicTemplateLoader, $ionicBackdrop, $log, $q, $timeout, $ro
         title: options.title,
         buttons: options.buttons,
         subTitle: options.subTitle,
+        mainClass: options.mainClass,
         $buttonTapped: function(button, event) {
           var result = (button.onTap || angular.noop)(event);
           event = event.originalEvent || event; //jquery events
@@ -33496,6 +33498,9 @@ function($animate, $ionicTemplateLoader, $ionicBackdrop, $log, $q, $timeout, $ro
 
           self.element.removeClass('popup-hidden');
           self.element.addClass('popup-showing active');
+          if (self.scope.mainClass) {
+              self.element.addClass(self.scope.mainClass);
+          }
           ionic.DomUtil.centerElementByMarginTwice(self.element[0]);
           focusInputOrButton(self.element);
         });
@@ -33507,6 +33512,9 @@ function($animate, $ionicTemplateLoader, $ionicBackdrop, $log, $q, $timeout, $ro
         self.isShown = false;
         self.element.removeClass('active');
         self.element.addClass('popup-hidden');
+          if (self.scope.mainClass) {
+              self.element.removeClass(self.scope.mainClass);
+          }
         $timeout(callback, 250);
       };
       self.remove = function() {
