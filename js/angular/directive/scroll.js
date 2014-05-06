@@ -16,6 +16,9 @@
  * @param {expression=} on-scroll Called whenever the user scrolls.
  * @param {boolean=} scrollbar-x Whether to show the horizontal scrollbar. Default false.
  * @param {boolean=} scrollbar-y Whether to show the vertical scrollbar. Default true.
+ * @param {boolean=} zooming Whether to support pinch-to-zoom
+ * @param {integer=} min-zoom The smallest zoom amount allowed (default is 0.5)
+ * @param {integer=} max-zoom The largest zoom amount allowed (default is 3)
  */
 IonicModule
 .directive('ionScroll', [
@@ -46,6 +49,9 @@ function($timeout, $controller, $ionicBind) {
           scroll: '@',
           scrollbarX: '@',
           scrollbarY: '@',
+          zooming: '@',
+          minZoom: '@',
+          maxZoom: '@'
         });
 
         if (angular.isDefined($attr.padding)) {
@@ -67,7 +73,10 @@ function($timeout, $controller, $ionicBind) {
           scrollbarX: $scope.$eval($scope.scrollbarX) !== false,
           scrollbarY: $scope.$eval($scope.scrollbarY) !== false,
           scrollingX: $scope.direction.indexOf('x') >= 0,
-          scrollingY: $scope.direction.indexOf('y') >= 0
+          scrollingY: $scope.direction.indexOf('y') >= 0,
+          zooming: $scope.$eval($scope.zooming) === true,
+          maxZoom: $scope.$eval($scope.maxZoom) || 3,
+          minZoom: $scope.$eval($scope.minZoom) || 0.5
         };
         if (isPaging) {
           scrollViewOptions.speedMultiplier = 0.8;

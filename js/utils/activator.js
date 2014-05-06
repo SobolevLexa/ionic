@@ -9,9 +9,12 @@
   ionic.activator = {
 
     start: function(e) {
+      var self = this;
+
       // when an element is touched/clicked, it climbs up a few
       // parents to see if it is an .item or .button element
       ionic.requestAnimationFrame(function(){
+        if ( ionic.tap.requiresNativeClick(e.target) ) return;
         var ele = e.target;
         var eleToActivate;
 
@@ -37,7 +40,7 @@
 
           // in XX milliseconds, set the queued elements to active
           if(e.type === 'touchstart') {
-            setTimeout(activateElements, 80);
+            self._activateTimeout = setTimeout(activateElements, 80);
           } else {
             ionic.requestAnimationFrame(activateElements);
           }
@@ -50,6 +53,7 @@
 
     end: function() {
       // clear out any active/queued elements after XX milliseconds
+      clearTimeout(this._activateTimeout)
       setTimeout(clear, 200);
     }
 

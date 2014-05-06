@@ -216,6 +216,52 @@ describe('Ionic Tap', function() {
     expect( tapPointerMoved ).toEqual(false);
   });
 
+  it('Should not preventDefault on text input that already has focus and is iOS', function() {
+    // prevent the default so iOS doesn't auto scroll to the input
+    ionic.Platform.setPlatform('ios');
+    var label = document.createElement('label');
+    var textarea = document.createElement('textarea');
+    label.appendChild(textarea);
+    var e = {
+      target: label,
+      preventDefault: function() { e.preventedDefault = true; }
+    };
+
+    tapActiveEle = textarea;
+
+    tapTouchStart(e);
+    expect( e.preventedDefault ).toBeUndefined();
+  });
+
+  it('Should preventDefault on text input that does not have focus and is iOS', function() {
+    // prevent the default so iOS doesn't auto scroll to the input
+    ionic.Platform.setPlatform('ios');
+    var label = document.createElement('label');
+    var textarea = document.createElement('textarea');
+    label.appendChild(textarea);
+    var e = {
+      target: label,
+      preventDefault: function() { e.preventedDefault = true; }
+    };
+
+    tapTouchStart(e);
+    expect( e.preventedDefault ).toEqual(true);
+  });
+
+  it('Should not preventDefault on text input target thats not iOS', function() {
+    // do not prevent default on touchend of a text input or else you cannot move the text caret
+    ionic.Platform.setPlatform('android');
+    var label = document.createElement('label');
+    var textarea = document.createElement('textarea');
+    label.appendChild(textarea);
+    var e = {
+      target: label,
+      preventDefault: function() { e.preventedDefault = true; }
+    };
+    tapTouchStart(e);
+    expect( e.preventedDefault ).toBeUndefined();
+  });
+
   it('Should set tapPointerMoved=false on tapTouchCancel', function() {
     tapPointerMoved = true;
     tapTouchCancel();
@@ -238,7 +284,7 @@ describe('Ionic Tap', function() {
 
   it('Should set tapPointerMoved=false on tapMouseUp', function() {
     tapPointerMoved = true;
-    tapMouseUp({});
+    tapMouseUp({ target: {} });
     expect( tapPointerMoved ).toEqual(false);
   });
 
@@ -248,6 +294,41 @@ describe('Ionic Tap', function() {
     expect( tapPointerMoved ).toEqual(false);
     tapMouseMove({ clientX: 200, clientY: 100 });
     expect( tapPointerMoved ).toEqual(true);
+  });
+
+  it('Should stop event on mouseup if touch is enabled', function() {
+    tapEnabledTouchEvents = true;
+    var e = {
+      stopPropagation: function() { this.stoppedPropagation = true; },
+      preventDefault: function() { this.preventedDefault = true; }
+    }
+    tapMouseUp(e);
+    expect( e.stoppedPropagation ).toEqual(true);
+    expect( e.preventedDefault ).toEqual(true);
+  });
+
+  it('Should not stop event on mouseup if the target was a select element', function() {
+    tapEnabledTouchEvents = false;
+    e = {
+      target: document.createElement('select'),
+      stopPropagation: function() { this.stoppedPropagation = true; },
+      preventDefault: function() { this.preventedDefault = true; }
+    }
+    expect( tapMouseUp(e) ).toEqual(false);
+    expect( e.stoppedPropagation ).toBeUndefined();
+    expect( e.preventedDefault ).toBeUndefined();
+  });
+
+  it('Should not stop event on mouseup if touch is not enabled', function() {
+    tapEnabledTouchEvents = false;
+    e = {
+      target: document.createElement('button'),
+      stopPropagation: function() { this.stoppedPropagation = true; },
+      preventDefault: function() { this.preventedDefault = true; }
+    }
+    tapMouseUp(e);
+    expect( e.stoppedPropagation ).toBeUndefined();
+    expect( e.preventedDefault ).toBeUndefined();
   });
 
   it('Should trigger click on touchend and nearby touchstart happened', function() {
@@ -336,13 +417,20 @@ describe('Ionic Tap', function() {
   });
 
   it('Should cancel click when mouseup coordinates are too far from mousedown coordinates', function() {
-    var e = {
+    var e1 = {
+      target: document.createElement('button'),
       clientX: 100, clientY: 100,
       dispatchEvent: function(){ this.dispatchedEvent = true; }
     };
-    tapMouseDown(e);
-    tapMouseUp({ clientX: 200, clientY: 100 });
-    expect( e.dispatchedEvent ).toBeUndefined();
+    tapMouseDown(e1);
+
+    var e2 = {
+      target: document.createElement('button'),
+      clientX: 100, clientY: 100,
+      dispatchEvent: function(){ this.dispatchedEvent = true; }
+    };
+    tapMouseUp(e2);
+    expect( e2.dispatchedEvent ).toBeUndefined();
   });
 
   it('Should do nothing if mousedown is a custom event from ionic tap', function() {
@@ -481,60 +569,60 @@ describe('Ionic Tap', function() {
     expect( tapClick(e) ).toEqual(false);
   });
 
-  it('Should tapRequiresNativeClick for invalid element', function() {
-    expect( tapRequiresNativeClick( null ) ).toEqual(true);
+  it('Should ionic.tap.requiresNativeClick for invalid element', function() {
+    expect( ionic.tap.requiresNativeClick( null ) ).toEqual(true);
   });
 
-  it('Should tapRequiresNativeClick for input.disabled', function() {
+  it('Should ionic.tap.requiresNativeClick for input.disabled', function() {
     var ele = document.createElement('input');
     ele.disabled = true;
-    expect( tapRequiresNativeClick( ele ) ).toEqual(true);
+    expect( ionic.tap.requiresNativeClick( ele ) ).toEqual(true);
   });
 
-  it('Should tapRequiresNativeClick for input[range]', function() {
+  it('Should ionic.tap.requiresNativeClick for input[range]', function() {
     var ele = document.createElement('input');
     ele.type = 'range';
-    expect( tapRequiresNativeClick( ele ) ).toEqual(true);
+    expect( ionic.tap.requiresNativeClick( ele ) ).toEqual(true);
   });
 
-  it('Should tapRequiresNativeClick for input[file]', function() {
+  it('Should ionic.tap.requiresNativeClick for input[file]', function() {
     var ele = document.createElement('input');
     ele.type = 'file';
-    expect( tapRequiresNativeClick( ele ) ).toEqual(true);
+    expect( ionic.tap.requiresNativeClick( ele ) ).toEqual(true);
   });
 
-  it('Should tapRequiresNativeClick for video element', function() {
+  it('Should ionic.tap.requiresNativeClick for video element', function() {
     var ele = document.createElement('video');
-    expect( tapRequiresNativeClick( ele ) ).toEqual(true);
+    expect( ionic.tap.requiresNativeClick( ele ) ).toEqual(true);
   });
 
-  it('Should tapRequiresNativeClick for object element', function() {
+  it('Should ionic.tap.requiresNativeClick for object element', function() {
     var ele = document.createElement('object');
-    expect( tapRequiresNativeClick( ele ) ).toEqual(true);
+    expect( ionic.tap.requiresNativeClick( ele ) ).toEqual(true);
   });
 
-  it('Should not tapRequiresNativeClick for common inputs', function() {
+  it('Should not ionic.tap.requiresNativeClick for common inputs', function() {
     var inputTypes = ['text', 'email', 'search', 'tel', 'number', 'date', 'month', 'password', null, undefined, ''];
     for(var x=0; x<inputTypes.length; x++) {
       var targetEle = document.createElement('input');
       targetEle.type = inputTypes[x];
-      expect( tapRequiresNativeClick(targetEle) ).toEqual(false);
+      expect( ionic.tap.requiresNativeClick(targetEle) ).toEqual(false);
     }
-    expect( tapRequiresNativeClick( document.createElement('img') ) ).toEqual(false);
-    expect( tapRequiresNativeClick( document.createElement('div') ) ).toEqual(false);
-    expect( tapRequiresNativeClick( document.createElement('textarea') ) ).toEqual(false);
-    expect( tapRequiresNativeClick( document.createElement('select') ) ).toEqual(false);
+    expect( ionic.tap.requiresNativeClick( document.createElement('img') ) ).toEqual(false);
+    expect( ionic.tap.requiresNativeClick( document.createElement('div') ) ).toEqual(false);
+    expect( ionic.tap.requiresNativeClick( document.createElement('textarea') ) ).toEqual(false);
+    expect( ionic.tap.requiresNativeClick( document.createElement('select') ) ).toEqual(false);
   });
 
-  it('Should tapRequiresNativeClick for an element with data-tap-disabled attribute', function() {
+  it('Should ionic.tap.requiresNativeClick for an element with data-tap-disabled attribute', function() {
     var div = document.createElement('div');
-    expect( tapRequiresNativeClick( div ) ).toEqual(false);
+    expect( ionic.tap.requiresNativeClick( div ) ).toEqual(false);
 
     div.setAttribute('data-tap-disabled', "true");
-    expect( tapRequiresNativeClick( div ) ).toEqual(true);
+    expect( ionic.tap.requiresNativeClick( div ) ).toEqual(true);
   });
 
-  it('Should tapRequiresNativeClick for an element with one of its parents with data-tap-disabled attribute', function() {
+  it('Should ionic.tap.requiresNativeClick for an element with one of its parents with data-tap-disabled attribute', function() {
     var div1 = document.createElement('div');
     var div2 = document.createElement('div');
     var div3 = document.createElement('div');
@@ -548,11 +636,11 @@ describe('Ionic Tap', function() {
 
     div2.setAttribute('data-tap-disabled', "true");
 
-    expect( tapRequiresNativeClick( div1 ) ).toEqual(false);
-    expect( tapRequiresNativeClick( div2 ) ).toEqual(true);
-    expect( tapRequiresNativeClick( div3 ) ).toEqual(true);
-    expect( tapRequiresNativeClick( div4 ) ).toEqual(true);
-    expect( tapRequiresNativeClick( div5 ) ).toEqual(true);
+    expect( ionic.tap.requiresNativeClick( div1 ) ).toEqual(false);
+    expect( ionic.tap.requiresNativeClick( div2 ) ).toEqual(true);
+    expect( ionic.tap.requiresNativeClick( div3 ) ).toEqual(true);
+    expect( ionic.tap.requiresNativeClick( div4 ) ).toEqual(true);
+    expect( ionic.tap.requiresNativeClick( div5 ) ).toEqual(true);
   });
 
   it('Should not allow a click that has an textarea target but not created by tapClick', function() {
@@ -565,6 +653,21 @@ describe('Ionic Tap', function() {
 
     expect( e.stoppedPropagation ).toBeDefined();
     expect( e.preventedDefault ).toBeDefined();
+  });
+
+  it('Should allow a click that is a from an "Enter" or "Go" keypress submit', function() {
+    var target = document.createElement('button');
+    target.type = 'submit';
+    var e = {
+      target: target,
+      detail: 0,
+      stopPropagation: function(){ this.stoppedPropagation = true; },
+      preventDefault: function(){ this.preventedDefault = true; }
+    };
+    tapClickGateKeeper(e);
+
+    expect( e.stoppedPropagation ).toBeUndefined();
+    expect( e.preventedDefault ).toBeUndefined();
   });
 
   it('Should allow a click that is a tapClick', function() {
@@ -778,6 +881,16 @@ describe('Ionic Tap', function() {
     expect( ionic.tap.ignoreScrollStart(e) ).toEqual(true);
   });
 
+  it('Should prevent scrolling because the target is input[file]', function() {
+    var target = document.createElement('input');
+    target.type = 'file';
+    var e = {
+      target: target,
+      defaultPrevented: true
+    };
+    expect( ionic.tap.ignoreScrollStart(e) ).toEqual(true);
+  });
+
   it('Should prevent scrolling because the target is input[range]', function() {
     var target = document.createElement('input');
     target.type = 'range';
@@ -930,6 +1043,14 @@ describe('Ionic Tap', function() {
     expect( ionic.tap.isTextInput(ele) ).toEqual(false);
 
     ele = document.createElement('select');
+    expect( ionic.tap.isTextInput(ele) ).toEqual(false);
+
+    ele = document.createElement('div');
+    ele.setAttribute('contenteditable', true);
+    expect( ionic.tap.isTextInput(ele) ).toEqual(true);
+
+    ele = document.createElement('div');
+    ele.setAttribute('contenteditable', false);
     expect( ionic.tap.isTextInput(ele) ).toEqual(false);
   });
 

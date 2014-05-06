@@ -1,10 +1,13 @@
 {
   "name": "ionic",
   "private": false,
-  "version": "1.0.0-beta.1",
-  "codename": "actinium",
+  "version": "1.0.0-beta.3",
+  "codename": "americium",
+  "changelog": "http://git.io/wliUjg",
   "repository": {
-    "url": "git://github.com/driftyco/ionic.git"
+    "url": "git://github.com/driftyco/ionic.git",
+    "changelogUrl": "http://git.io/LoDTyQ",
+    "downloadUrl": "http://git.io/EHfQ_g"
   },
   "devDependencies": {
     "karma": "~0.11.13",
@@ -45,8 +48,9 @@
     "event-stream": "3.1.0",
     "gulp-strip-debug": "^0.3.0",
     "gulp-footer": "^1.0.4",
-    "gulp-twitter": "0.0.3",
-    "marked": "^0.3.2"
+    "marked": "^0.3.2",
+    "ircb": "^0.3.1",
+    "node-twitter-api": "^1.2.2"
   },
   "licenses": [
     {

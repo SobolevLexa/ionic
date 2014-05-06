@@ -1,5 +1,3 @@
-describe('',function(){
-
 describe('$ionicList controller', function() {
   beforeEach(module('ionic'));
   function setup(attrs) {
@@ -146,23 +144,27 @@ describe('ionList directive', function() {
   });
 
   it('should watch ctrl.showDelete when true', inject(function($animate) {
-    var el = setup('', '<div class="item-delete item-left-edit ng-hide"></div><div></div>');
+    var el = setup('', '<div class="item-delete item-left-edit ng-hide"></div><div></div><div class="item-content"></div></div>');
     flush();
 
     spyOn(el.controller('ionList'), 'closeOptionButtons');
 
     el.controller('ionList').showDelete(true);
+    expect(el.controller('ionList').canSwipeItems()).toBe(true);
     el.scope().$apply();
 
+    expect(el.controller('ionList').canSwipeItems()).toBe(false);
     expect(el.controller('ionList').closeOptionButtons).toHaveBeenCalled();
     var deleteButtons = angular.element(el[0].querySelectorAll('.item-delete.item-left-edit'));
     expect(deleteButtons.length).not.toBe(0);
     expect(deleteButtons.hasClass('ng-hide')).toBe(false);
     expect(el.children().hasClass('list-left-editing')).toBe(true);
+    var content = angular.element(el[0].querySelectorAll('.item-content'));
+    expect(content.attr('data-tap-disabled')).toEqual('true');
   }));
 
   it('should watch ctrl.showDelete when false from true', inject(function($animate) {
-    var el = setup('', '<div class="item-delete item-left-edit"></div><div></div>');
+    var el = setup('', '<div class="item-delete item-left-edit"></div><div></div><div class="item-content">');
     flush();
 
     spyOn(el.controller('ionList'), 'closeOptionButtons');
@@ -172,27 +174,34 @@ describe('ionList directive', function() {
     el.controller('ionList').showDelete(false);
     el.scope().$apply();
 
+    expect(el.controller('ionList').canSwipeItems()).toBe(true);
     expect(el.controller('ionList').closeOptionButtons.callCount).toBe(1);
     var deleteButtons = angular.element(el[0].querySelectorAll('.item-delete.item-left-edit'));
     expect(deleteButtons.hasClass('ng-hide')).toBe(true);
     expect(deleteButtons.length).not.toBe(0);
     expect(el.children().hasClass('list-left-editing')).toBe(false);
+    var content = angular.element(el[0].querySelectorAll('.item-content'));
+    expect(content.attr('data-tap-disabled')).toBeFalsy();
   }));
 
   it('should watch ctrl.showReorder when true', inject(function($animate) {
-    var el = setup('show-reorder="shouldReorder"', '<div class="item-reorder item-right-edit ng-hide"></div><div></div>');
+    var el = setup('show-reorder="shouldReorder"', '<div class="item-reorder item-right-edit ng-hide"></div><div class="item-content"></div><div></div>');
     flush();
 
     spyOn(el.controller('ionList'), 'closeOptionButtons');
 
     el.controller('ionList').showReorder(true);
+    expect(el.controller('ionList').canSwipeItems()).toBe(true);
     el.scope().$apply();
 
     expect(el.controller('ionList').closeOptionButtons).toHaveBeenCalled();
+    expect(el.controller('ionList').canSwipeItems()).toBe(false);
     var reorderButtons = angular.element(el[0].querySelectorAll('.item-reorder.item-right-edit'));
     expect(reorderButtons.length).not.toBe(0);
     expect(reorderButtons.hasClass('ng-hide')).toBe(false);
     expect(el.children().hasClass('list-right-editing')).toBe(true);
+    var content = angular.element(el[0].querySelectorAll('.item-content'));
+    expect(content.attr('data-tap-disabled')).toEqual('true');
   }));
 
   it('should watch ctrl.showReorder when false from true', inject(function($animate) {
@@ -206,11 +215,14 @@ describe('ionList directive', function() {
     el.controller('ionList').showReorder(false);
     el.scope().$apply();
 
+    expect(el.controller('ionList').canSwipeItems()).toBe(true);
     expect(el.controller('ionList').closeOptionButtons.callCount).toBe(1);
     var reorderButtons = angular.element(el[0].querySelectorAll('.item-reorder.item-right-edit'));
     expect(reorderButtons.length).not.toBe(0);
     expect(reorderButtons.hasClass('ng-hide')).toBe(true);
     expect(el.children().hasClass('list-right-editing')).toBe(false);
+    var content = angular.element(el[0].querySelectorAll('.item-content'));
+    expect(content.attr('data-tap-disabled')).toBeFalsy();
   }));
 });
 
@@ -235,11 +247,13 @@ describe('ionItem directive', function() {
   });
   ['href', 'ng-href'].forEach(function(attr) {
     it('should be complex anchor if '+attr+' is defined', function() {
-      var el = setup(attr+'="something"');
+      var el = setup(attr+'="something/{{foo}}"');
       expect(el.hasClass('item item-complex')).toBe(true);
       expect(el.children()[0].tagName).toBe('A');
       expect(el.children().hasClass('item-content')).toBe(true);
-      expect(el.children().attr('ng-href')).toBe('something');
+      expect(el.children().attr('href')).toBe('something/');
+      el.scope().$apply('foo = 44');
+      expect(el.children().attr('href')).toBe('something/44');
     });
   });
   ['ion-option-button','ion-reorder-button','ion-delete-button'].forEach(function(tag) {
@@ -329,6 +343,4 @@ describe('ionOptionButton directive', function() {
     expect(optionContainer.length).toBe(1);
     expect(optionContainer.children().hasClass('button')).toBe(true);
   }));
-});
-
 });

@@ -9,7 +9,7 @@
  * Copyright 2014 Drifty Co.
  * http://drifty.com/
  *
- * Ionic, v1.0.0-beta.1
+ * Ionic, v1.0.0-beta.3
  * A powerful HTML5 mobile app framework.
  * http://ionicframework.com/
  *
@@ -26,7 +26,7 @@
 window.ionic = {
   controllers: {},
   views: {},
-  version: '1.0.0-beta.1'
+  version: '1.0.0-beta.3'
 };
 
 (function(ionic) {
@@ -479,7 +479,7 @@ window.ionic = {
 
       // Make sure to trigger the event on the given target, or dispatch it from
       // the window if we don't have an event target
-      data && data.target && data.target.dispatchEvent(event) || window.dispatchEvent(event);
+      data && data.target && data.target.dispatchEvent && data.target.dispatchEvent(event) || window.dispatchEvent(event);
     },
 
     /**
@@ -2475,7 +2475,8 @@ ionic.tap = {
   isTextInput: function(ele) {
     return !!ele &&
            (ele.tagName == 'TEXTAREA' ||
-           (ele.tagName == 'INPUT' && !(/radio|checkbox|range|file|submit|reset/i).test(ele.type)));
+            ele.contentEditable === 'true' ||
+            (ele.tagName == 'INPUT' && !(/radio|checkbox|range|file|submit|reset/i).test(ele.type)) );
   },
 
   isLabelWithTextInput: function(ele) {
@@ -2489,7 +2490,7 @@ ionic.tap = {
     return ionic.tap.isTextInput(ele) || ionic.tap.isLabelWithTextInput(ele);
   },
 
-  cloneFocusedInput: function(container, instance) {
+  cloneFocusedInput: function(container, scrollIntance) {
     if(ionic.tap.hasCheckedClone) return;
     ionic.tap.hasCheckedClone = true;
 
@@ -2502,6 +2503,7 @@ ionic.tap = {
           clonedInput.type = focusInput.type;
           clonedInput.value = focusInput.value;
           clonedInput.className = 'cloned-text-input';
+          clonedInput.readOnly = true;
           focusInput.parentElement.insertBefore(clonedInput, focusInput);
           focusInput.style.top = focusInput.offsetTop;
           focusInput.classList.add('previous-input-focus');
@@ -2512,7 +2514,7 @@ ionic.tap = {
 
   hasCheckedClone: false,
 
-  removeClonedInputs: function(container) {
+  removeClonedInputs: function(container, scrollIntance) {
     ionic.tap.hasCheckedClone = false;
 
     ionic.requestAnimationFrame(function(){
@@ -2567,6 +2569,11 @@ function triggerMouseEvent(type, ele, x, y) {
 }
 
 function tapClickGateKeeper(e) {
+  if(e.target.type == 'submit' && e.detail === 0) {
+    // do not prevent click if it came from an "Enter" or "Go" keypress submit
+    return;
+  }
+
   // do not allow through any click events that were not created by ionic.tap
   if( (ionic.scroll.isScrolling && ionic.tap.containsOrIsTextInput(e.target) ) ||
       (!e.isIonicTap && !tapRequiresNativeClick(e.target)) ) {
@@ -2624,6 +2631,12 @@ function tapMouseDown(e) {
 }
 
 function tapMouseUp(e) {
+  if(tapEnabledTouchEvents) {
+    e.stopPropagation();
+    e.preventDefault();
+    return false;
+  }
+
   if( tapIgnoreEvent(e) ) return;
 
   if( !tapHasPointerMoved(e) ) {
@@ -2655,6 +2668,19 @@ function tapTouchStart(e) {
 
   tapEventListener('touchmove');
   ionic.activator.start(e);
+
+  if( ionic.Platform.isIOS() && ionic.tap.isLabelWithTextInput(e.target) ) {
+    // if the tapped element is a label, which has a child input
+    // then preventDefault so iOS doesn't ugly auto scroll to the input
+    // but do not prevent default on Android or else you cannot move the text caret
+    // and do not prevent default on Android or else no virtual keyboard shows up
+
+    var textInput = tapTargetElement( tapContainingElement(e.target) );
+    if( textInput !== tapActiveEle ) {
+      // don't preventDefault on an already focused input or else iOS's text caret isn't usable
+      e.preventDefault();
+    }
+  }
 }
 
 function tapTouchEnd(e) {
@@ -2684,17 +2710,11 @@ function tapTouchCancel(e) {
 }
 
 function tapEnableTouchEvents() {
-  if(!tapEnabledTouchEvents) {
-    tapEventListener('mouseup', false);
-    tapEnabledTouchEvents = true;
-  }
+  tapEnabledTouchEvents = true;
   clearTimeout(tapMouseResetTimer);
-  tapMouseResetTimer = setTimeout(tapResetMouseEvent, 2500);
-}
-
-function tapResetMouseEvent() {
-  tapEventListener('mouseup', false);
-  tapEnabledTouchEvents = false;
+  tapMouseResetTimer = setTimeout(function(){
+    tapEnabledTouchEvents = false;
+  }, 2000);
 }
 
 function tapIgnoreEvent(e) {
@@ -2710,25 +2730,35 @@ function tapIgnoreEvent(e) {
 function tapHandleFocus(ele) {
   tapTouchFocusedInput = null;
 
+  var triggerFocusIn = false;
+
   if(ele.tagName == 'SELECT') {
     // trick to force Android options to show up
-    void 0;
     triggerMouseEvent('mousedown', ele, 0, 0);
-    tapActiveElement(ele);
     ele.focus && ele.focus();
+    triggerFocusIn = true;
 
-  } else if(tapActiveElement() !== ele) {
-    if( (/input|textarea/i).test(ele.tagName) ) {
-      void 0;
-      tapActiveElement(ele);
-      ele.focus && ele.focus();
-      ele.value = ele.value;
-      if( tapEnabledTouchEvents ) {
-        tapTouchFocusedInput = ele;
-      }
-    } else {
-      tapFocusOutActive();
+  } else if(tapActiveElement() === ele) {
+    // already is the active element and has focus
+    triggerFocusIn = true;
+
+  } else if( (/input|textarea/i).test(ele.tagName) ) {
+    triggerFocusIn = true;
+    ele.focus && ele.focus();
+    ele.value = ele.value;
+    if( tapEnabledTouchEvents ) {
+      tapTouchFocusedInput = ele;
     }
+
+  } else {
+    tapFocusOutActive();
+  }
+
+  if(triggerFocusIn) {
+    tapActiveElement(ele);
+    ionic.trigger('ionic.focusin', {
+      target: ele
+    }, true);
   }
 }
 
@@ -2822,9 +2852,7 @@ function tapTargetElement(ele) {
 }
 
 ionic.DomUtil.ready(function(){
-
-  ionic.tap.register(document.body);
-
+  ionic.tap.register(document);
 });
 
 (function(document, ionic) {
@@ -2838,9 +2866,12 @@ ionic.DomUtil.ready(function(){
   ionic.activator = {
 
     start: function(e) {
+      var self = this;
+
       // when an element is touched/clicked, it climbs up a few
       // parents to see if it is an .item or .button element
       ionic.requestAnimationFrame(function(){
+        if (tapRequiresNativeClick(e.target)) return;
         var ele = e.target;
         var eleToActivate;
 
@@ -2866,7 +2897,7 @@ ionic.DomUtil.ready(function(){
 
           // in XX milliseconds, set the queued elements to active
           if(e.type === 'touchstart') {
-            setTimeout(activateElements, 80);
+            self._activateTimeout = setTimeout(activateElements, 80);
           } else {
             ionic.requestAnimationFrame(activateElements);
           }
@@ -2879,6 +2910,7 @@ ionic.DomUtil.ready(function(){
 
     end: function() {
       // clear out any active/queued elements after XX milliseconds
+      clearTimeout(this._activateTimeout)
       setTimeout(clear, 200);
     }
 
@@ -2893,6 +2925,7 @@ ionic.DomUtil.ready(function(){
   }
 
   function activateElements() {
+    // console.log('ACTIVATING');
     // activate all elements in the queue
     for(var key in queueElements) {
       if(queueElements[key]) {
@@ -3100,90 +3133,278 @@ ionic.DomUtil.ready(function(){
 
 })(window.ionic);
 
-(function(ionic) {
+
+/*
+IONIC KEYBOARD
+---------------
+
+*/
+
+var keyboardViewportHeight = window.innerHeight;
+var keyboardIsOpen;
+var keyboardActiveElement;
+var keyboardFocusOutTimer;
+var keyboardFocusInTimer;
+
+var KEYBOARD_OPEN_CSS = 'keyboard-open';
+var SCROLL_CONTAINER_CSS = 'scroll';
+
+ionic.keyboard = {
+  isOpen: false,
+  height: null
+};
+
+function keyboardInit() {
+  if( keyboardHasPlugin() ) {
+    window.addEventListener('native.showkeyboard', keyboardNativeShow);
+  }
+
+  document.body.addEventListener('ionic.focusin', keyboardBrowserFocusIn);
+  document.body.addEventListener('focusin', keyboardBrowserFocusIn);
+
+  document.body.addEventListener('focusout', keyboardFocusOut);
+  document.body.addEventListener('orientationchange', keyboardOrientationChange);
+
+  document.removeEventListener('touchstart', keyboardInit);
+}
+
+function keyboardNativeShow(e) {
+  ionic.keyboard.height = e.keyboardHeight;
+}
+
+function keyboardBrowserFocusIn(e) {
+  if( !e.target || !ionic.tap.isTextInput(e.target) || !keyboardIsWithinScroll(e.target) ) return;
+
+  document.addEventListener('keydown', keyboardOnKeyDown, false);
+
+  document.body.scrollTop = 0;
+  document.body.querySelector('.scroll-content').scrollTop = 0;
+
+  keyboardActiveElement = e.target;
+
+  keyboardSetShow(e);
+}
+
+function keyboardSetShow(e) {
+  clearTimeout(keyboardFocusInTimer);
+  clearTimeout(keyboardFocusOutTimer);
+
+  keyboardFocusInTimer = setTimeout(function(){
+    var keyboardHeight = keyboardGetHeight();
+    var elementBounds = keyboardActiveElement.getBoundingClientRect();
+
+    keyboardShow(e.target, elementBounds.top, elementBounds.bottom, keyboardViewportHeight, keyboardHeight);
+  }, 32);
+}
+
+function keyboardShow(element, elementTop, elementBottom, viewportHeight, keyboardHeight) {
+  var details = {
+    target: element,
+    elementTop: Math.round(elementTop),
+    elementBottom: Math.round(elementBottom),
+    keyboardHeight: keyboardHeight
+  };
+
+  if( keyboardIsOverWebView() ) {
+    // keyboard sits on top of the view, but doesn't adjust the view's height
+    // lower the content height by subtracting the keyboard height from the view height
+    details.contentHeight = viewportHeight - keyboardHeight;
+  } else {
+    // view's height was shrunk down and the keyboard takes up the space the view doesn't fill
+    // do not add extra padding at the bottom of the scroll view, native already did that
+    details.contentHeight = viewportHeight;
+  }
+
+  void 0;
+
+  // distance from top of input to the top of the keyboard
+  details.keyboardTopOffset = details.elementTop - details.contentHeight;
+
+  void 0;
+
+  // figure out if the element is under the keyboard
+  details.isElementUnderKeyboard = (details.elementBottom > details.contentHeight);
+
+  ionic.keyboard.isOpen = true;
+
+  // send event so the scroll view adjusts
+  keyboardActiveElement = element;
+  ionic.trigger('scrollChildIntoView', details, true);
+
+  ionic.requestAnimationFrame(function(){
+    document.body.classList.add(KEYBOARD_OPEN_CSS);
+  });
+
+  // any showing part of the document that isn't within the scroll the user
+  // could touchmove and cause some ugly changes to the app, so disable
+  // any touchmove events while the keyboard is open using e.preventDefault()
+  document.addEventListener('touchmove', keyboardPreventDefault, false);
+
+  return details;
+}
+
+function keyboardFocusOut(e) {
+  clearTimeout(keyboardFocusInTimer);
+  clearTimeout(keyboardFocusOutTimer);
+
+  keyboardFocusOutTimer = setTimeout(keyboardHide, 350);
+}
+
+function keyboardHide() {
+  void 0;
+  ionic.keyboard.isOpen = false;
+
+  ionic.trigger('resetScrollView', {
+    target: keyboardActiveElement
+  }, true);
+
+  ionic.requestAnimationFrame(function(){
+    document.body.classList.remove(KEYBOARD_OPEN_CSS);
+  });
+
+  // the keyboard is gone now, remove the touchmove that disables native scroll
+  document.removeEventListener('touchmove', keyboardPreventDefault);
+  document.removeEventListener('keydown', keyboardOnKeyDown);
+}
+
+function keyboardUpdateViewportHeight() {
+  if( window.innerHeight > keyboardViewportHeight ) {
+    keyboardViewportHeight = window.innerHeight;
+  }
+}
+
+function keyboardOnKeyDown(e) {
+  if( ionic.scroll.isScrolling ) {
+    keyboardPreventDefault(e);
+  }
+}
+
+function keyboardPreventDefault(e) {
+  e.preventDefault();
+}
+
+function keyboardOrientationChange() {
+  keyboardViewportHeight = window.innerHeight;
+  setTimeout(function(){
+    keyboardViewportHeight = window.innerHeight;
+  }, 999);
+}
+
+function keyboardGetHeight() {
+  // check if we are already have a keyboard height from the plugin
+  if (ionic.keyboard.height ) {
+    return ionic.keyboard.height;
+  }
+
+  // fallback for when its the webview without the plugin
+  // or for just the standard web browser
+  if( ionic.Platform.isIOS() ) {
+    if( ionic.Platform.isWebView() ) {
+      return 260;
+    }
+    return 216;
+  } else if( ionic.Platform.isAndroid() ) {
+    if( ionic.Platform.isWebView() ) {
+      return 220;
+    }
+    if( ionic.Platform.version() <= 4.3) {
+      return 230;
+    }
+  }
+
+  // safe guess
+  return 275;
+}
+
+function keyboardIsWithinScroll(ele) {
+  while(ele) {
+    if(ele.classList.contains(SCROLL_CONTAINER_CSS)) {
+      return true;
+    }
+    ele = ele.parentElement;
+  }
+  return false;
+}
+
+function keyboardIsOverWebView() {
+  return ( ionic.Platform.isIOS() ) ||
+         ( ionic.Platform.isAndroid() && !ionic.Platform.isWebView() );
+}
+
+function keyboardHasPlugin() {
+  return !!(window.cordova && cordova.plugins && cordova.plugins.Keyboard);
+}
 
 ionic.Platform.ready(function() {
-  var rememberedDeviceWidth = window.innerWidth;
-  var rememberedDeviceHeight = window.innerHeight;
-  var keyboardHeight;
-  var rememberedActiveEl;
-  var alreadyOpen = false;
+  keyboardUpdateViewportHeight();
 
-  window.addEventListener('focusin', onBrowserFocusIn);
+  // Android sometimes reports bad innerHeight on window.load
+  // try it again in a lil bit to play it safe
+  setTimeout(keyboardUpdateViewportHeight, 999);
 
-  if(ionic.Platform.isWebView() && window.cordova && cordova.plugins && cordova.plugins.Keyboard) {
-    window.addEventListener('native.showkeyboard', onNativeKeyboardShow);
-    window.addEventListener('native.hidekeyboard', onNativeKeyboardHide);
-
-  } else if (ionic.Platform.isAndroid()){
-    window.addEventListener('resize', onBrowserResize);
-  }
-
-  function onBrowserFocusIn(e) {
-      if (ionic.tap.containsOrIsTextInput(e.target) || e.srcElement.isContentEditable){
-        document.body.scrollTop = 0;
-      }
-
-      rememberedActiveEl = e.srcElement;
-  }
-
-  function onBrowserResize() {
-    if(rememberedDeviceWidth !== window.innerWidth) {
-      // If the width of the window changes, we have an orientation change
-      rememberedDeviceWidth = window.innerWidth;
-      rememberedDeviceHeight = window.innerHeight;
-
-    } else if(rememberedDeviceHeight !== window.innerHeight &&
-               window.innerHeight < rememberedDeviceHeight) {
-      // If the height changes, and it's less than before, we have a keyboard open
-      document.body.classList.add('keyboard-open');
-
-      keyboardHeight = rememberedDeviceHeight - window.innerHeight;
-      setTimeout(function() {
-        ionic.trigger('scrollChildIntoView', {
-          target: rememberedActiveEl, 
-        }, true);
-      }, 100);
-
-    } else {
-      // Otherwise we have a keyboard close or a *really* weird resize
-      document.body.classList.remove('keyboard-open');
-    }
-  }
-
-  function onNativeKeyboardShow(e) {
-    if(rememberedActiveEl) {
-      // This event is caught by the nearest parent scrollView
-      // of the activeElement
-      if(cordova.plugins.Keyboard.isVisible) {
-        document.body.classList.add('keyboard-open');
-        ionic.trigger('scrollChildIntoView', {
-          keyboardHeight: e.keyboardHeight,
-          target: rememberedActiveEl,
-          firstKeyboardShow: !alreadyOpen
-        }, true);
-
-        if(!alreadyOpen) alreadyOpen = true;
-      }
-    }
-  }
-
-  function onNativeKeyboardHide() {
-    // wait to see if we're just switching inputs
-    setTimeout(function() {
-      if(!cordova.plugins.Keyboard.isVisible) {
-        document.body.classList.remove('keyboard-open');
-        alreadyOpen = false;
-        ionic.trigger('resetScrollView', {
-          target: rememberedActiveEl
-        }, true);
-      }
-    }, 100);
-  }
-
+  // only initialize the adjustments for the virtual keyboard
+  // if a touchstart event happens
+  document.addEventListener('touchstart', keyboardInit, false);
 });
 
-})(window.ionic);
+
+
+var viewportTag;
+var viewportProperties = {};
+
+
+function viewportLoadTag() {
+  var x;
+
+  for(x=0; x<document.head.children.length; x++) {
+    if(document.head.children[x].name == 'viewport') {
+      viewportTag = document.head.children[x];
+      break;
+    }
+  }
+
+  if(viewportTag) {
+    var props = viewportTag.content.toLowerCase().replace(/\s+/g, '').split(',');
+    var keyValue;
+    for(x=0; x<props.length; x++) {
+      keyValue = props[x].split('=');
+      if(keyValue.length == 2) viewportProperties[ keyValue[0] ] = keyValue[1];
+    }
+    viewportInitWebView();
+  }
+}
+
+function viewportInitWebView() {
+  var hasViewportChange = false;
+
+  if( ionic.Platform.isWebView() ) {
+    if( viewportProperties.height != 'device-height' ) {
+      viewportProperties.height = 'device-height';
+      hasViewportChange = true;
+    }
+  } else if( viewportProperties.height ) {
+    delete viewportProperties.height;
+    hasViewportChange = true;
+  }
+  if(hasViewportChange) viewportUpdate();
+}
+
+function viewportUpdate(updates) {
+  if(!viewportTag) return;
+
+  ionic.Utils.extend(viewportProperties, updates);
+
+  var key, props = [];
+  for(key in viewportProperties) {
+    if(viewportProperties[key]) props.push(key + '=' + viewportProperties[key]);
+  }
+
+  viewportTag.content = props.join(',');
+}
+
+ionic.DomUtil.ready(function() {
+  viewportLoadTag();
+});
 
 (function(ionic) {
 'use strict';
@@ -3223,6 +3444,7 @@ ionic.Platform.ready(function() {
  * rendering. This eases a lot of cases where it might be pretty complex to break down a state
  * based on the pure time difference.
  */
+var zyngaCore = { effect: {} };
 (function(global) {
   var time = Date.now || function() {
     return +new Date();
@@ -3232,15 +3454,7 @@ ionic.Platform.ready(function() {
   var running = {};
   var counter = 1;
 
-  // Create namespaces
-  if (!global.core) {
-    var core = global.core = { effect : {} };
-
-  } else if (!core.effect) {
-    core.effect = {};
-  }
-
-  core.effect.Animate = {
+  zyngaCore.effect.Animate = {
 
     /**
      * A requestAnimationFrame wrapper / polyfill.
@@ -3422,7 +3636,7 @@ ionic.Platform.ready(function() {
           completedCallback && completedCallback(desiredFrames - (dropCounter / ((now - start) / millisecondsPerSecond)), id, percent === 1 || duration == null);
         } else if (render) {
           lastFrame = now;
-          core.effect.Animate.requestAnimationFrame(step, root);
+          zyngaCore.effect.Animate.requestAnimationFrame(step, root);
         }
       };
 
@@ -3430,7 +3644,7 @@ ionic.Platform.ready(function() {
       running[id] = true;
 
       // Init first step
-      core.effect.Animate.requestAnimationFrame(step, root);
+      zyngaCore.effect.Animate.requestAnimationFrame(step, root);
 
       // Return unique animation ID
       return id;
@@ -3570,8 +3784,15 @@ ionic.views.Scroll = ionic.views.View.inherit({
       penetrationAcceleration : 0.08,
 
       // The ms interval for triggering scroll events
-      scrollEventInterval: 10
-    };
+      scrollEventInterval: 10,
+
+      getContentWidth: function() {
+        return Math.max(self.__content.scrollWidth, self.__content.offsetWidth);
+      },
+      getContentHeight: function() {
+        return Math.max(self.__content.scrollHeight, self.__content.offsetHeight);
+      }
+		};
 
     for (var key in options) {
       this.options[key] = options[key];
@@ -3604,9 +3825,6 @@ ionic.views.Scroll = ionic.views.View.inherit({
     };
 
     this.triggerScrollEvent = ionic.throttle(function() {
-
-      self.onScroll();
-
       ionic.trigger('scroll', {
         scrollTop: self.__scrollTop,
         scrollLeft: self.__scrollLeft,
@@ -3823,50 +4041,32 @@ ionic.views.Scroll = ionic.views.View.inherit({
     //Broadcasted when keyboard is shown on some platforms.
     //See js/utils/keyboard.js
     container.addEventListener('scrollChildIntoView', function(e) {
-      var keyboardHeight = e.detail.keyboardHeight || 0;
-      var deviceHeight = window.innerHeight;
-
-      var frameHeight;
-      if (ionic.Platform.isIOS() && ionic.Platform.version() >= 7.0  || (!ionic.Platform.isWebView() && ionic.Platform.isAndroid())){
-        frameHeight = deviceHeight;
-      }
-      else {
-        frameHeight = deviceHeight - keyboardHeight;
-      }
-
-      var element = e.target;
-
-      //getBoundingClientRect() will give us position relative to the viewport
-      var elementDeviceBottom = element.getBoundingClientRect().bottom;
-
-      if (e.detail.firstKeyboardShow){
-        //shrink scrollview so we can actually scroll if the input is hidden
-        //if it isn't shrink so we can scroll to inputs under the keyboard
-        container.style.height = (container.clientHeight - keyboardHeight) + "px";
+      if( !self.isScrolledIntoView ) {
+        // shrink scrollview so we can actually scroll if the input is hidden
+        // if it isn't shrink so we can scroll to inputs under the keyboard
+        container.style.height = (container.clientHeight - e.detail.keyboardHeight) + "px";
         container.style.overflow = "visible";
-
+        self.isScrolledIntoView = true;
         //update scroll view
         self.resize();
       }
 
       //If the element is positioned under the keyboard...
-      if (elementDeviceBottom > frameHeight) {
+      if( e.detail.isElementUnderKeyboard ) {
         //Put element in middle of visible screen
         //Wait for resize() to reset scroll position
+        ionic.scroll.isScrolling = true;
         setTimeout(function(){
-          //distance from top of input to the top of the keyboard
-          var keyboardTopOffset = element.getBoundingClientRect().top - frameHeight;
           //middle of the scrollview, where we want to scroll to
           var scrollViewMidpointOffset = container.clientHeight * 0.5;
-          var scrollOffset = keyboardTopOffset + scrollViewMidpointOffset;
-          self.scrollBy(0, scrollOffset, true);
-
-          //please someone tell me there's a better way to do this
-          //wait until input is scrolled into view, then fix focus
-          setTimeout(function(){
-            element.value = element.value; //thanks @adambradley 1337h4x
-          }, 600);
-        }, 32);
+          var scrollTop = e.detail.keyboardTopOffset + scrollViewMidpointOffset;
+          void 0;
+          ionic.tap.cloneFocusedInput(container, self);
+          self.scrollBy(0, scrollTop, true);
+          self.onScroll();
+        },
+          (ionic.Platform.isIOS() ? 80 : 350)
+        );
       }
 
       //Only the first scrollView parent of the element that broadcasted this event
@@ -3876,9 +4076,11 @@ ionic.views.Scroll = ionic.views.View.inherit({
 
     container.addEventListener('resetScrollView', function(e) {
       //return scrollview to original height once keyboard has hidden
+      self.isScrolledIntoView = false;
       container.style.height = "";
       container.style.overflow = "";
       self.resize();
+      ionic.scroll.isScrolling = false;
     });
 
 
@@ -3934,11 +4136,11 @@ ionic.views.Scroll = ionic.views.View.inherit({
           // disabled being able to select text on an input
           // hide the input which has focus, and show a cloned one that doesn't have focus
           self.__isSelectable = false;
-          ionic.tap.cloneFocusedInput(self.__container);
+          ionic.tap.cloneFocusedInput(container, self);
         }
       }
 
-      self.doTouchMove(e.touches, e.timeStamp);
+      self.doTouchMove(e.touches, e.timeStamp, e.scale);
     };
 
     self.touchEnd = function(e) {
@@ -3948,13 +4150,13 @@ ionic.views.Scroll = ionic.views.View.inherit({
       self.__enableScrollY = true;
 
       if( !self.__isDragging && !self.__isDecelerating && !self.__isAnimating ) {
-        ionic.tap.removeClonedInputs(self.__container);
+        ionic.tap.removeClonedInputs(container, self);
       }
     };
 
     self.options.orgScrollingComplete = self.options.scrollingComplete;
     self.options.scrollingComplete = function() {
-      ionic.tap.removeClonedInputs(self.__container);
+      ionic.tap.removeClonedInputs(container, self);
       self.options.orgScrollingComplete();
     };
 
@@ -4226,10 +4428,10 @@ ionic.views.Scroll = ionic.views.View.inherit({
     // Update Scroller dimensions for changed content
     // Add padding to bottom of content
     this.setDimensions(
-      this.__container.clientWidth,
-      this.__container.clientHeight,
-      Math.max(this.__content.scrollWidth, this.__content.offsetWidth),
-      Math.max(this.__content.scrollHeight, this.__content.offsetHeight)
+    	this.__container.clientWidth,
+    	this.__container.clientHeight,
+      this.options.getContentWidth(),
+      this.options.getContentHeight()
     );
   },
   /*
@@ -4275,7 +4477,7 @@ ionic.views.Scroll = ionic.views.View.inherit({
     if (helperElem.style[perspectiveProperty] !== undef) {
 
       return function(left, top, zoom, wasResize) {
-        content.style[transformProperty] = 'translate3d(' + (-left) + 'px,' + (-top) + 'px,0)';
+        content.style[transformProperty] = 'translate3d(' + (-left) + 'px,' + (-top) + 'px,0) scale(' + zoom + ')';
         self.__repositionScrollbars();
         if(!wasResize) {
           self.triggerScrollEvent();
@@ -4285,7 +4487,7 @@ ionic.views.Scroll = ionic.views.View.inherit({
     } else if (helperElem.style[transformProperty] !== undef) {
 
       return function(left, top, zoom, wasResize) {
-        content.style[transformProperty] = 'translate(' + (-left) + 'px,' + (-top) + 'px)';
+        content.style[transformProperty] = 'translate(' + (-left) + 'px,' + (-top) + 'px) scale(' + zoom + ')';
         self.__repositionScrollbars();
         if(!wasResize) {
           self.triggerScrollEvent();
@@ -4319,7 +4521,6 @@ ionic.views.Scroll = ionic.views.View.inherit({
    * @param contentHeight {Integer} Outer height of inner element
    */
   setDimensions: function(clientWidth, clientHeight, contentWidth, contentHeight) {
-
     var self = this;
 
     // Only update values which are defined
@@ -4488,7 +4689,7 @@ ionic.views.Scroll = ionic.views.View.inherit({
 
     // Stop deceleration
     if (self.__isDecelerating) {
-      core.effect.Animate.stop(self.__isDecelerating);
+      zyngaCore.effect.Animate.stop(self.__isDecelerating);
       self.__isDecelerating = false;
     }
 
@@ -4563,7 +4764,7 @@ ionic.views.Scroll = ionic.views.View.inherit({
 
     // Stop deceleration
     if (self.__isDecelerating) {
-      core.effect.Animate.stop(self.__isDecelerating);
+      zyngaCore.effect.Animate.stop(self.__isDecelerating);
       self.__isDecelerating = false;
     }
 
@@ -4695,14 +4896,14 @@ ionic.views.Scroll = ionic.views.View.inherit({
 
     // Stop deceleration
     if (self.__isDecelerating) {
-      core.effect.Animate.stop(self.__isDecelerating);
+      zyngaCore.effect.Animate.stop(self.__isDecelerating);
       self.__isDecelerating = false;
       self.__interruptedAnimation = true;
     }
 
     // Stop animation
     if (self.__isAnimating) {
-      core.effect.Animate.stop(self.__isAnimating);
+      zyngaCore.effect.Animate.stop(self.__isAnimating);
       self.__isAnimating = false;
       self.__interruptedAnimation = true;
     }
@@ -5085,7 +5286,7 @@ ionic.views.Scroll = ionic.views.View.inherit({
     // Remember whether we had an animation, then we try to continue based on the current "drive" of the animation
     var wasAnimating = self.__isAnimating;
     if (wasAnimating) {
-      core.effect.Animate.stop(wasAnimating);
+      zyngaCore.effect.Animate.stop(wasAnimating);
       self.__isAnimating = false;
     }
 
@@ -5138,7 +5339,7 @@ ionic.views.Scroll = ionic.views.View.inherit({
       };
 
       // When continuing based on previous animation we choose an ease-out animation instead of ease-in-out
-      self.__isAnimating = core.effect.Animate.start(step, verify, completed, self.options.animationDuration, wasAnimating ? easeOutCubic : easeInOutCubic);
+      self.__isAnimating = zyngaCore.effect.Animate.start(step, verify, completed, self.options.animationDuration, wasAnimating ? easeOutCubic : easeInOutCubic);
 
     } else {
 
@@ -5270,7 +5471,7 @@ ionic.views.Scroll = ionic.views.View.inherit({
     };
 
     // Start animation and switch on flag
-    self.__isDecelerating = core.effect.Animate.start(step, verify, completed);
+    self.__isDecelerating = zyngaCore.effect.Animate.start(step, verify, completed);
 
   },
 
@@ -5710,6 +5911,7 @@ ionic.scroll = {
   var ReorderDrag = function(opts) {
     this.dragThresholdY = opts.dragThresholdY || 0;
     this.onReorder = opts.onReorder;
+    this.listEl = opts.listEl;
     this.el = opts.el;
     this.scrollEl = opts.scrollEl;
     this.scrollView = opts.scrollView;
@@ -5718,7 +5920,10 @@ ionic.scroll = {
   ReorderDrag.prototype = new DragOp();
 
   ReorderDrag.prototype._moveElement = function(e) {
-    var y = e.gesture.center.pageY - this._currentDrag.elementHeight + this._currentDrag.scrollDelta;
+    var y = e.gesture.center.pageY -
+      this._currentDrag.elementHeight + 
+      this.scrollView.getValues().top -
+      this.listEl.offsetTop;
     this.el.style[ionic.CSS.TRANSFORM] = 'translate3d(0, '+y+'px, 0)';
   };
 
@@ -5739,8 +5944,7 @@ ionic.scroll = {
       startIndex: startIndex,
       placeholder: placeholder,
       scrollHeight: scroll,
-      list: placeholder.parentNode,
-      scrollDelta: 0
+      list: placeholder.parentNode
     };
 
     this._moveElement(e);
@@ -5767,12 +5971,10 @@ ionic.scroll = {
 
       if (e.gesture.deltaY < 0 && pixelsPastTop > 0 && scrollY > 0) {
         this.scrollView.scrollBy(null, -pixelsPastTop);
-        this._currentDrag.scrollDelta -= pixelsPastTop;
       }
       if (e.gesture.deltaY > 0 && pixelsPastBottom > 0) {
         if (scrollY < this.scrollView.getScrollMax().top) {
           this.scrollView.scrollBy(null, pixelsPastBottom);
-          this._currentDrag.scrollDelta += pixelsPastBottom;
         }
       }
     }
@@ -5991,6 +6193,7 @@ ionic.scroll = {
 
         if(item) {
           this._dragOp = new ReorderDrag({
+            listEl: this.el,
             el: item,
             scrollEl: this.scrollEl,
             scrollView: this.scrollView,
@@ -6194,6 +6397,8 @@ ionic.scroll = {
 
 ionic.views.Slider = ionic.views.View.inherit({
   initialize: function (options) {
+    var slider = this;
+
     // utilities
     var noop = function() {}; // simple no operation function
     var offloadFn = function(fn) { setTimeout(fn || noop, 0) }; // offload a functions execution
@@ -6437,8 +6642,8 @@ ionic.views.Slider = ionic.views.View.inherit({
         switch (event.type) {
           case 'mousedown': this.start(event); break;
           case 'touchstart': this.start(event); break;
-          case 'touchmove': this.move(event); break;
-          case 'mousemove': this.move(event); break;
+          case 'touchmove': this.touchmove(event); break;
+          case 'mousemove': this.touchmove(event); break;
           case 'touchend': offloadFn(this.end(event)); break;
           case 'mouseup': offloadFn(this.end(event)); break;
           case 'webkitTransitionEnd':
@@ -6484,10 +6689,15 @@ ionic.views.Slider = ionic.views.View.inherit({
           document.addEventListener('mouseup', this, false);
         }
       },
-      move: function(event) {
+      touchmove: function(event) {
 
         // ensure swiping with one touch and not pinching
-        if ( event.touches.length > 1 || event.scale && event.scale !== 1) return
+        // ensure sliding is enabled
+        if (event.touches.length > 1 ||
+            event.scale && event.scale !== 1 ||
+            slider.slideIsDisabled) {
+          return;
+        }
 
         if (options.disableScroll) event.preventDefault();
 
@@ -6651,6 +6861,12 @@ ionic.views.Slider = ionic.views.View.inherit({
       setup();
     };
 
+    this.enableSlide = function(shouldEnable) {
+      if (arguments.length) {
+        this.slideIsDisabled = !shouldEnable;
+      }
+      return !this.slideIsDisabled;
+    },
     this.slide = function(to, speed) {
       // cancel slideshow
       stop();
@@ -31959,7 +32175,7 @@ angular.module('ui.router.compat')
  * Copyright 2014 Drifty Co.
  * http://drifty.com/
  *
- * Ionic, v1.0.0-beta.1
+ * Ionic, v1.0.0-beta.3
  * A powerful HTML5 mobile app framework.
  * http://ionicframework.com/
  *
@@ -32016,10 +32232,6 @@ var deprecated = {
 };
 
 
-/**
- * Create a wrapping module to ease having to include too many
- * modules.
- */
 var IonicModule = angular.module('ionic', [
   // Angular deps
   'ngAnimate',
@@ -32053,7 +32265,7 @@ var IonicModule = angular.module('ionic', [
  *    // Show the action sheet
  *    $ionicActionSheet.show({
  *      buttons: [
- *        { text: 'Share' },
+ *        { text: '<b>Share</b> This' },
  *        { text: 'Move' },
  *      ],
  *      destructiveText: 'Delete',
@@ -32136,9 +32348,12 @@ function($rootScope, $document, $compile, $animate, $timeout, $ionicTemplateLoad
       };
 
       // Support Android back button to close
-      scope.$deregisterBackButton = $ionicPlatform.registerBackButtonAction(function(){
-        hideSheet();
-      }, 300);
+      scope.$deregisterBackButton = $ionicPlatform.registerBackButtonAction(
+        function(){
+          hideSheet();
+        },
+        PLATFORM_BACK_BUTTON_PRIORITY_ACTION_SHEET
+      );
 
       scope.cancel = function() {
         hideSheet(true);
@@ -32287,7 +32502,7 @@ function($document) {
     retain: retain,
     /**
      * @ngdoc method
-     * @name $ionicBackdrop#retain
+     * @name $ionicBackdrop#release
      * @description
      * Releases the backdrop.
      */
@@ -32370,6 +32585,440 @@ IonicModule
     });
   };
 }]);
+
+IonicModule
+.factory('$collectionDataSource', [
+  '$cacheFactory',
+  '$parse',
+function($cacheFactory, $parse) {
+  var nextCacheId = 0;
+  function CollectionRepeatDataSource(options) {
+    var self = this;
+    this.scope = options.scope;
+    this.transcludeFn = options.transcludeFn;
+    this.transcludeParent = options.transcludeParent;
+
+    this.keyExpr = options.keyExpr;
+    this.listExpr = options.listExpr;
+    this.trackByExpr = options.trackByExpr;
+
+    this.heightGetter = options.heightGetter;
+    this.widthGetter = options.widthGetter;
+
+    this.dimensions = [];
+    this.data = [];
+
+    if (this.trackByExpr) {
+      var trackByGetter = $parse(this.trackByExpr);
+      var hashFnLocals = {$id: hashKey};
+      this.itemHashGetter = function(index, value) {
+        hashFnLocals[self.keyExpr] = value;
+        hashFnLocals.$index = index;
+        return trackByGetter(self.scope, hashFnLocals);
+      };
+    } else {
+      this.itemHashGetter = function(index, value) {
+        return hashKey(value);
+      };
+    }
+
+    var cacheKeys = {};
+    this.itemCache = $cacheFactory(nextCacheId++, {size: 500});
+
+    var _put = this.itemCache.put;
+    this.itemCache.put = function(key, value) {
+      cacheKeys[key] = true;
+      return _put(key, value);
+    };
+
+    var _remove = this.itemCache.remove;
+    this.itemCache.remove = function(key) {
+      delete cacheKeys[key];
+      return _remove(key);
+    };
+    this.itemCache.keys = function() {
+      return Object.keys(cacheKeys);
+    };
+  }
+  CollectionRepeatDataSource.prototype = {
+    destroy: function() {
+      this.dimensions.length = 0;
+      this.itemCache.keys().forEach(function(key) {
+        var item = this.itemCache.get(key);
+        item.element.remove();
+        item.scope.$destroy();
+      }, this);
+      this.itemCache.removeAll();
+    },
+    calculateDataDimensions: function() {
+      var locals = {};
+      this.dimensions = this.data.map(function(value, index) {
+        locals[this.keyExpr] = value;
+        locals.$index = index;
+        return {
+          width: this.widthGetter(this.scope, locals),
+          height: this.heightGetter(this.scope, locals)
+        };
+      }, this);
+    },
+    compileItem: function(index, value) {
+      var key = this.itemHashGetter(index, value);
+      var cachedItem = this.itemCache.get(key);
+      if (cachedItem) return cachedItem;
+
+      var item = {};
+      item.scope = this.scope.$new();
+      item.scope[this.keyExpr] = value;
+
+      this.transcludeFn(item.scope, function(clone) {
+        item.element = clone;
+        item.element[0].style.position = 'absolute';
+      });
+
+      return this.itemCache.put(key, item);
+    },
+    getItem: function(index) {
+      var value = this.data[index];
+      var item = this.compileItem(index, value);
+
+      if (item.scope.$index !== index) {
+        item.scope.$index = index;
+        item.scope.$first = (index === 0);
+        item.scope.$last = (index === (this.getLength() - 1));
+        item.scope.$middle = !(item.scope.$first || item.scope.$last);
+        item.scope.$odd = !(item.scope.$even = (index&1) === 0);
+      }
+
+      return item;
+    },
+    detachItem: function(item) {
+      var i, node, parent;
+      //Don't .remove(), that will destroy element data
+      for (i = 0; i < item.element.length; i++) {
+        node = item.element[i];
+        parent = node.parentNode;
+        parent && parent.removeChild(node);
+      }
+      //Don't .$destroy(), just stop watchers and events firing
+      disconnectScope(item.scope);
+    },
+    attachItem: function(item) {
+      if (!item.element[0].parentNode) {
+        this.transcludeParent[0].appendChild(item.element[0]);
+      }
+      reconnectScope(item.scope);
+    },
+    getLength: function() {
+      return this.data && this.data.length || 0;
+    },
+    setData: function(value) {
+      this.data = value || [];
+      this.calculateDataDimensions();
+    },
+  };
+
+  return CollectionRepeatDataSource;
+}]);
+
+/**
+* Computes a hash of an 'obj'.
+ * Hash of a:
+ *  string is string
+ *  number is number as string
+ *  object is either result of calling $$hashKey function on the object or uniquely generated id,
+ *         that is also assigned to the $$hashKey property of the object.
+ *
+ * @param obj
+ * @returns {string} hash string such that the same input will have the same hash string.
+ *         The resulting string key is in 'type:hashKey' format.
+ */
+function hashKey(obj) {
+  var objType = typeof obj,
+      key;
+
+  if (objType == 'object' && obj !== null) {
+    if (typeof (key = obj.$$hashKey) == 'function') {
+      // must invoke on object to keep the right this
+      key = obj.$$hashKey();
+    } else if (key === undefined) {
+      key = obj.$$hashKey = ionic.Utils.nextUid();
+    }
+  } else {
+    key = obj;
+  }
+
+  return objType + ':' + key;
+}
+
+function disconnectScope(scope) {
+  if (scope.$root === scope) {
+    return; // we can't disconnect the root node;
+  }
+  var parent = scope.$parent;
+  scope.$$disconnected = true;
+  // See Scope.$destroy
+  if (parent.$$childHead === scope) {
+    parent.$$childHead = scope.$$nextSibling;
+  }
+  if (parent.$$childTail === scope) {
+    parent.$$childTail = scope.$$prevSibling;
+  }
+  if (scope.$$prevSibling) {
+    scope.$$prevSibling.$$nextSibling = scope.$$nextSibling;
+  }
+  if (scope.$$nextSibling) {
+    scope.$$nextSibling.$$prevSibling = scope.$$prevSibling;
+  }
+  scope.$$nextSibling = scope.$$prevSibling = null;
+}
+
+function reconnectScope(scope) {
+  if (scope.$root === scope) {
+    return; // we can't disconnect the root node;
+  }
+  if (!scope.$$disconnected) {
+    return;
+  }
+  var parent = scope.$parent;
+  scope.$$disconnected = false;
+  // See Scope.$new for this logic...
+  scope.$$prevSibling = parent.$$childTail;
+  if (parent.$$childHead) {
+    parent.$$childTail.$$nextSibling = scope;
+    parent.$$childTail = scope;
+  } else {
+    parent.$$childHead = parent.$$childTail = scope;
+  }
+}
+
+
+IonicModule
+.factory('$collectionRepeatManager', [
+  '$rootScope',
+  '$timeout',
+function($rootScope, $timeout) {
+  function CollectionRepeatManager(options) {
+    var self = this;
+    this.dataSource = options.dataSource;
+    this.element = options.element;
+    this.scrollView = options.scrollView;
+
+    this.isVertical = !!this.scrollView.options.scrollingY;
+    this.renderedItems = {};
+
+    this.lastRenderScrollValue = this.bufferTransformOffset = this.hasBufferStartIndex =
+      this.hasBufferEndIndex = this.bufferItemsLength = 0;
+    this.setCurrentIndex(0);
+
+    this.scrollView.__$callback = this.scrollView.__callback;
+    this.scrollView.__callback = angular.bind(this, this.renderScroll);
+
+    function getViewportSize() { return self.viewportSize; }
+    if (this.isVertical) {
+      this.scrollView.options.getContentHeight = getViewportSize;
+
+      this.scrollValue = function() {
+        return this.scrollView.__scrollTop;
+      };
+      this.scrollMaxValue = function() {
+        return this.scrollView.__maxScrollTop;
+      };
+      this.scrollSize = function() {
+        return this.scrollView.__clientHeight;
+      };
+      this.secondaryScrollSize = function() {
+        return this.scrollView.__clientWidth;
+      };
+      this.transformString = function(y, x) {
+        return 'translate3d('+x+'px,'+y+'px,0)';
+      };
+      this.primaryDimension = function(dim) {
+        return dim.height;
+      };
+      this.secondaryDimension = function(dim) {
+        return dim.width;
+      };
+    } else {
+      this.scrollView.options.getContentWidth = getViewportSize;
+
+      this.scrollValue = function() {
+        return this.scrollView.__scrollLeft;
+      };
+      this.scrollMaxValue = function() {
+        return this.scrollView.__maxScrollLeft;
+      };
+      this.scrollSize = function() {
+        return this.scrollView.__clientWidth;
+      };
+      this.secondaryScrollSize = function() {
+        return this.scrollView.__clientHeight;
+      };
+      this.transformString = function(x, y) {
+        return 'translate3d('+x+'px,'+y+'px,0)';
+      };
+      this.primaryDimension = function(dim) {
+        return dim.width;
+      };
+      this.secondaryDimension = function(dim) {
+        return dim.height;
+      };
+    }
+  }
+
+  CollectionRepeatManager.prototype = {
+    destroy: function() {
+      for (var i in this.renderedItems) {
+        this.removeItem(i);
+      }
+    },
+    calculateDimensions: function() {
+      var primaryPos = 0;
+      var secondaryPos = 0;
+      var len = this.dataSource.dimensions.length;
+      var secondaryScrollSize = this.secondaryScrollSize();
+      var previous;
+
+      return this.dataSource.dimensions.map(function(dim) {
+        var rect = {
+          primarySize: this.primaryDimension(dim),
+          secondarySize: Math.min(this.secondaryDimension(dim), secondaryScrollSize)
+        };
+
+        if (previous) {
+          secondaryPos += previous.secondarySize;
+          if (previous.primaryPos === primaryPos &&
+              secondaryPos + rect.secondarySize > secondaryScrollSize) {
+            secondaryPos = 0;
+            primaryPos += previous.primarySize;
+          } else {
+          }
+        }
+
+        rect.primaryPos = primaryPos;
+        rect.secondaryPos = secondaryPos;
+
+        previous = rect;
+        return rect;
+      }, this);
+    },
+    resize: function() {
+      this.dimensions = this.calculateDimensions();
+      var last = this.dimensions[this.dimensions.length - 1];
+      this.viewportSize = last ? last.primaryPos + last.primarySize : 0;
+      this.setCurrentIndex(0);
+      this.render(true);
+    },
+    setCurrentIndex: function(index, height) {
+      this.currentIndex = index;
+
+      this.hasPrevIndex = index > 0;
+      if (this.hasPrevIndex) {
+        this.previousPos = this.dimensions[index - 1].primaryPos;
+      }
+      this.hasNextIndex = index + 1 < this.dataSource.getLength();
+      if (this.hasNextIndex) {
+        this.nextPos = this.dimensions[index + 1].primaryPos;
+      }
+    },
+    renderScroll: ionic.animationFrameThrottle(function(transformLeft, transformTop, zoom, wasResize) {
+      if (this.isVertical) {
+        transformTop = this.getTransformPosition(transformTop);
+      } else {
+        transformLeft = this.getTransformPosition(transformLeft);
+      }
+      return this.scrollView.__$callback(transformLeft, transformTop, zoom, wasResize);
+    }),
+    getTransformPosition: function(transformPos) {
+      if ((this.hasNextIndex && transformPos >= this.nextPos) ||
+          (this.hasPrevIndex && transformPos < this.previousPos) ||
+           Math.abs(transformPos - this.lastRenderScrollValue) > 100) {
+        this.render();
+      }
+      return transformPos - this.lastRenderScrollValue;
+    },
+    getIndexForScrollValue: function(i, scrollValue) {
+      var rect;
+      //Scrolling up
+      if (scrollValue <= this.dimensions[i].primaryPos) {
+        while ( (rect = this.dimensions[i - 1]) && rect.primaryPos > scrollValue) {
+          i--;
+        }
+      //Scrolling down
+      } else {
+        while ( (rect = this.dimensions[i + 1]) && rect.primaryPos < scrollValue) {
+          i++;
+        }
+      }
+      return i;
+    },
+    render: function(shouldRedrawAll) {
+      var i;
+      if (this.currentIndex >= this.dataSource.getLength() || shouldRedrawAll) {
+        for (i in this.renderedItems) {
+          this.removeItem(i);
+        }
+        if (this.currentIndex >= this.dataSource.getLength()) return null;
+      }
+
+      var rect;
+      var scrollValue = this.scrollValue();
+      var scrollDelta = scrollValue - this.lastRenderScrollValue;
+      var scrollSize = this.scrollSize();
+      var scrollSizeEnd = scrollSize + scrollValue;
+      var startIndex = this.getIndexForScrollValue(this.currentIndex, scrollValue);
+
+      //Make buffer start on previous row
+      var bufferStartIndex = Math.max(startIndex - 1, 0);
+      while (bufferStartIndex > 0 &&
+         (rect = this.dimensions[bufferStartIndex]) &&
+         rect.primaryPos === this.dimensions[startIndex - 1].primaryPos) {
+        bufferStartIndex--;
+      }
+      var startPos = this.dimensions[bufferStartIndex].primaryPos;
+
+      i = bufferStartIndex;
+      while ((rect = this.dimensions[i]) && (rect.primaryPos - rect.primarySize < scrollSizeEnd)) {
+        this.renderItem(i, rect.primaryPos - startPos, rect.secondaryPos);
+        i++;
+      }
+      var bufferEndIndex = i -1;
+
+      for (i in this.renderedItems) {
+        if (i < bufferStartIndex || i > bufferEndIndex) {
+          this.removeItem(i);
+        }
+      }
+
+      this.setCurrentIndex(startIndex);
+      this.lastRenderScrollValue = startPos;
+    },
+    renderItem: function(dataIndex, primaryPos, secondaryPos) {
+      var item = this.dataSource.getItem(dataIndex);
+      if (item) {
+        this.dataSource.attachItem(item);
+        item.element[0].style[ionic.CSS.TRANSFORM] = this.transformString(
+          primaryPos, secondaryPos, secondaryPos
+        );
+        this.renderedItems[dataIndex] = item;
+        if (item.scope && !item.scope.$$phase) {
+          item.scope.$digest();
+        }
+      } else {
+        delete this.renderedItems[dataIndex];
+      }
+    },
+    removeItem: function(dataIndex) {
+      var item = this.renderedItems[dataIndex];
+      if (item) {
+        this.dataSource.detachItem(item);
+        delete this.renderedItems[dataIndex];
+      }
+    }
+  };
+
+  return CollectionRepeatManager;
+}]);
+
 
 function delegateService(methodNames) {
   return ['$log', function($log) {
@@ -32878,6 +33527,15 @@ function($rootScope, $document, $compile, $timeout, $ionicPlatform, $ionicTempla
     // Create a new scope for the modal
     var scope = options.scope && options.scope.$new() || $rootScope.$new(true);
 
+    angular.extend(scope, {
+      $hasHeader: false,
+      $hasSubheader: false,
+      $hasFooter: false,
+      $hasSubfooter: false,
+      $hasTabs: false,
+      $hasTabsTop: false
+    });
+
     // Compile the template
     var element = $compile('<ion-modal>' + templateString + '</ion-modal>')(scope);
 
@@ -33039,6 +33697,9 @@ IonicModule
    */
 ]));
 
+var PLATFORM_BACK_BUTTON_PRIORITY_VIEW = 100;
+var PLATFORM_BACK_BUTTON_PRIORITY_ACTION_SHEET = 300;
+var PLATFORM_BACK_BUTTON_PRIORITY_POPUP = 500;
 /**
  * @ngdoc service
  * @name $ionicPlatform
@@ -33274,16 +33935,15 @@ var POPUP_TPL =
  */
 IonicModule
 .factory('$ionicPopup', [
-  '$animate',
   '$ionicTemplateLoader',
   '$ionicBackdrop',
-  '$log',
   '$q',
   '$timeout',
   '$rootScope',
   '$document',
   '$compile',
-function($animate, $ionicTemplateLoader, $ionicBackdrop, $log, $q, $timeout, $rootScope, $document, $compile) {
+  '$ionicPlatform',
+function($ionicTemplateLoader, $ionicBackdrop, $q, $timeout, $rootScope, $document, $compile, $ionicPlatform) {
   //TODO allow this to be configured
   var config = {
     stackPushDelay: 50
@@ -33443,7 +34103,6 @@ function($animate, $ionicTemplateLoader, $ionicBackdrop, $log, $q, $timeout, $ro
       scope: null,
       title: '',
       buttons: [],
-      mainClass: '',
     }, options || {});
 
     var popupPromise = $ionicTemplateLoader.compile({
@@ -33477,7 +34136,6 @@ function($animate, $ionicTemplateLoader, $ionicBackdrop, $log, $q, $timeout, $ro
         title: options.title,
         buttons: options.buttons,
         subTitle: options.subTitle,
-        mainClass: options.mainClass,
         $buttonTapped: function(button, event) {
           var result = (button.onTap || angular.noop)(event);
           event = event.originalEvent || event; //jquery events
@@ -33498,9 +34156,6 @@ function($animate, $ionicTemplateLoader, $ionicBackdrop, $log, $q, $timeout, $ro
 
           self.element.removeClass('popup-hidden');
           self.element.addClass('popup-showing active');
-          if (self.scope.mainClass) {
-              self.element.addClass(self.scope.mainClass);
-          }
           ionic.DomUtil.centerElementByMarginTwice(self.element[0]);
           focusInputOrButton(self.element);
         });
@@ -33512,9 +34167,6 @@ function($animate, $ionicTemplateLoader, $ionicBackdrop, $log, $q, $timeout, $ro
         self.isShown = false;
         self.element.removeClass('active');
         self.element.addClass('popup-hidden');
-          if (self.scope.mainClass) {
-              self.element.removeClass(self.scope.mainClass);
-          }
         $timeout(callback, 250);
       };
       self.remove = function() {
@@ -33532,6 +34184,10 @@ function($animate, $ionicTemplateLoader, $ionicBackdrop, $log, $q, $timeout, $ro
     });
   }
 
+  function onHardwareBackButton(e) {
+    popupStack[0] && popupStack[0].responseDeferred.resolve();
+  }
+
   function showPopup(options) {
     var popupPromise = $ionicPopup._createPopup(options);
     var previousPopup = popupStack[0];
@@ -33547,6 +34203,10 @@ function($animate, $ionicTemplateLoader, $ionicBackdrop, $log, $q, $timeout, $ro
         //Add popup-open & backdrop if this is first popup
         document.body.classList.add('popup-open');
         $ionicBackdrop.retain();
+        $ionicPopup._backButtonActionDone = $ionicPlatform.registerBackButtonAction(
+          onHardwareBackButton,
+          PLATFORM_BACK_BUTTON_PRIORITY_POPUP
+        );
       }
       popupStack.unshift(popup);
       popup.show();
@@ -33570,6 +34230,7 @@ function($animate, $ionicTemplateLoader, $ionicBackdrop, $log, $q, $timeout, $ro
           //Remove popup-open & backdrop if this is last popup
           document.body.classList.remove('popup-open');
           $ionicBackdrop.release();
+          ($ionicPopup._backButtonActionDone || angular.noop)();
         }
 
         return result;
@@ -33764,7 +34425,7 @@ IonicModule
   'anchorScroll',
   /**
    * @ngdoc method
-   * @name $ionicScrollDelegate.#getScrollView
+   * @name $ionicScrollDelegate#getScrollView
    * @returns {object} The scrollView associated with this delegate.
    */
   'getScrollView',
@@ -34001,6 +34662,13 @@ IonicModule
    * @param {number=} speed The number of milliseconds for the change to take.
    */
   'slide',
+  /**
+   * @ngdoc method
+   * @name $ionicSlideBoxDelegate#enableSlide
+   * @param {boolean=} shouldEnable Whether to enable sliding the slidebox.
+   * @returns {boolean} Whether sliding is enabled.
+   */
+  'enableSlide',
   /**
    * @ngdoc method
    * @name $ionicSlideBoxDelegate#previous
@@ -34262,7 +34930,10 @@ function($rootScope, $state, $location, $document, $animate, $ionicPlatform, $io
     e.preventDefault();
     return false;
   }
-  $ionicPlatform.registerBackButtonAction(onHardwareBackButton, 100);
+  $ionicPlatform.registerBackButtonAction(
+    onHardwareBackButton, 
+    PLATFORM_BACK_BUTTON_PRIORITY_VIEW
+  );
 
 }])
 
@@ -35411,14 +36082,14 @@ IonicModule
                 '<div class="action-sheet-wrapper">' +
                   '<div class="action-sheet">' +
                     '<div class="action-sheet-group">' +
-                      '<div class="action-sheet-title" ng-if="titleText">{{titleText}}</div>' +
-                      '<button class="button" ng-click="buttonClicked($index)" ng-repeat="button in buttons">{{button.text}}</button>' +
+                      '<div class="action-sheet-title" ng-if="titleText" ng-bind-html="titleText"></div>' +
+                      '<button class="button" ng-click="buttonClicked($index)" ng-repeat="button in buttons" ng-bind-html="button.text"></button>' +
                     '</div>' +
                     '<div class="action-sheet-group" ng-if="destructiveText">' +
-                      '<button class="button destructive" ng-click="destructiveButtonClicked()">{{destructiveText}}</button>' +
+                      '<button class="button destructive" ng-click="destructiveButtonClicked()" ng-bind-html="destructiveText"></button>' +
                     '</div>' +
                     '<div class="action-sheet-group" ng-if="cancelText">' +
-                      '<button class="button" ng-click="cancel()">{{cancelText}}</button>' +
+                      '<button class="button" ng-click="cancel()" ng-bind-html="cancelText"></button>' +
                     '</div>' +
                   '</div>' +
                 '</div>' +
@@ -35477,6 +36148,231 @@ IonicModule
 
   };
 });
+
+/**
+ * @ngdoc directive
+ * @module ionic
+ * @name collectionRepeat
+ * @restrict A
+ * @codepen mFygh
+ * @description
+ * `collection-repeat` is a directive that allows you to render lists with
+ * thousands of items in them, and experience little to no performance penalty.
+ *
+ * Demo:
+ *
+ * The directive renders onto the screen only the items that should be currently visible.
+ * So if you have 1,000 items in your list but only ten fit on your screen,
+ * collection-repeat will only render into the DOM the ten that are in the current
+ * scroll position.
+ *
+ * Here are a few things to keep in mind while using collection-repeat:
+ *
+ * 1. The data supplied to collection-repeat must be an array.
+ * 2. You must explicitly tell the directive what size your items will be in the DOM
+ * (pixel amount or percentage), using directive attributes (see below).
+ * 3. The elements rendered will be absolutely positioned: be sure to let your CSS work with this (see below).
+ * 4. Keep the HTML of your repeated elements as simple as possible. As the user scrolls down, elements
+ * will be lazily compiled. Resultingly, the more complicated your elements, the more likely it is that
+ * the on-demand compilation will cause jankiness in the user's scrolling.
+ * 5. The more elements you render on the screen at a time, the slower the scrolling will be.
+ * It is recommended to keep grids of collection-repeat list elements at 3-wide or less.
+ * 6. Each collection-repeat list will take up all of its parent scrollView's space.
+ * If you wish to have multiple lists on one page, put each list within its own
+ * {@link ionic.directive:ionScroll ionScroll} container.
+ *
+ *
+ *
+ * @usage
+ *
+ * #### Basic Usage (single rows of items)
+ *
+ * Notice two things here: we use ng-style to set the height of the item to match
+ * what the repeater thinks our item height is.  Additionally, we add a css rule
+ * to make our item stretch to fit the full screen (since it will be absolutely
+ * positioned).
+ *
+ * ```html
+ * <ion-content ng-controller="ContentCtrl">
+ *   <div class="list">
+ *     <div class="item my-item"
+ *       collection-repeat="item in items"
+ *       collection-item-width="'100%'"
+ *       collection-item-height="getItemHeight(item, $index)"
+ *       ng-style="{height: getItemHeight(item, $index)}">
+ *       {% raw %}{{item}}{% endraw %}
+ *     </div>
+ *   </div>
+ * </div>
+ * ```
+ * ```js
+ * function ContentCtrl($scope) {
+ *   $scope.items = [];
+ *   for (var i = 0; i < 1000; i++) {
+ *     $scope.items.push('Item ' + i);
+ *   }
+ *
+ *   $scope.getItemHeight = function(item, index) {
+ *     //Make evenly indexed items be 10px taller, for the sake of example
+ *     return (index % 2) === 0 ? 50 : 60;
+ *   };
+ * }
+ * ```
+ * ```css
+ * .my-item {
+ *   left: 0;
+ *   right: 0;
+ * }
+ * ```
+ *
+ * #### Grid Usage (three items per row)
+ *
+ * ```html
+ * <ion-content>
+ *   <div class="item item-avatar my-image-item"
+ *     collection-repeat="image in images"
+ *     collection-item-width="'33%'"
+ *     collection-item-height="'33%'">
+ *     <img ng-src="{{image.src}}">
+ *   </div>
+ * </ion-content>
+ * ```
+ * ```css
+ * .my-image-item {
+ *   height: 33%;
+ *   width: 33%;
+ * }
+ * ```
+ *
+ * @param {expression} collection-repeat The expression indicating how to enumerate a collection. These
+ *   formats are currently supported:
+ *
+ *   * `variable in expression` – where variable is the user defined loop variable and `expression`
+ *     is a scope expression giving the collection to enumerate.
+ *
+ *     For example: `album in artist.albums`.
+ *
+ *   * `variable in expression track by tracking_expression` – You can also provide an optional tracking function
+ *     which can be used to associate the objects in the collection with the DOM elements. If no tracking function
+ *     is specified the collection-repeat associates elements by identity in the collection. It is an error to have
+ *     more than one tracking function to resolve to the same key. (This would mean that two distinct objects are
+ *     mapped to the same DOM element, which is not possible.)  Filters should be applied to the expression,
+ *     before specifying a tracking expression.
+ *
+ *     For example: `item in items` is equivalent to `item in items track by $id(item)'. This implies that the DOM elements
+ *     will be associated by item identity in the array.
+ *
+ *     For example: `item in items track by $id(item)`. A built in `$id()` function can be used to assign a unique
+ *     `$$hashKey` property to each item in the array. This property is then used as a key to associated DOM elements
+ *     with the corresponding item in the array by identity. Moving the same object in array would move the DOM
+ *     element in the same way in the DOM.
+ *
+ *     For example: `item in items track by item.id` is a typical pattern when the items come from the database. In this
+ *     case the object identity does not matter. Two objects are considered equivalent as long as their `id`
+ *     property is same.
+ *
+ *     For example: `item in items | filter:searchText track by item.id` is a pattern that might be used to apply a filter
+ *     to items in conjunction with a tracking expression.
+ *
+ * @param {expression} collection-item-width The width of the repeated element.  Can be a number (in pixels) or a percentage.
+ * @param {expression} collection-item-height The height of the repeated element.  Can be a number (in pixels), or a percentage.
+ *
+ */
+IonicModule
+.directive('collectionRepeat', [
+  '$collectionRepeatManager',
+  '$collectionDataSource',
+  '$parse',
+function($collectionRepeatManager, $collectionDataSource, $parse) {
+  return {
+    priority: 1000,
+    transclude: 'element',
+    terminal: true,
+    $$tlb: true,
+    require: '^$ionicScroll',
+    link: function($scope, $element, $attr, scrollCtrl, $transclude) {
+      var scrollView = scrollCtrl.scrollView;
+      if (scrollView.options.scrollingX && scrollView.options.scrollingY) {
+        throw new Error("Cannot create a collection-repeat within a scrollView that is scrollable on both x and y axis.  Choose either x direction or y direction.");
+      }
+
+      var isVertical = !!scrollView.options.scrollingY;
+      if (isVertical && !$attr.collectionItemHeight) {
+        throw new Error("collection-repeat expected attribute collection-item-height to be a an expression that returns a number.");
+      } else if (!isVertical && !$attr.collectionItemWidth) {
+        throw new Error("collection-repeat expected attribute collection-item-width to be a an expression that returns a number.");
+      }
+      $attr.collectionItemHeight = $attr.collectionItemHeight || '"100%"';
+      $attr.collectionItemWidth = $attr.collectionItemWidth || '"100%"';
+
+      var heightParsed = $attr.collectionItemHeight ?
+        $parse($attr.collectionItemHeight) :
+        function() { return scrollView.__clientHeight; };
+      var widthParsed = $attr.collectionItemWidth ?
+        $parse($attr.collectionItemWidth) :
+        function() { return scrollView.__clientWidth; };
+
+      var heightGetter = function(scope, locals) {
+        var result = heightParsed(scope, locals);
+        if (angular.isString(result) && result.indexOf('%') > -1) {
+          return Math.floor(parseInt(result, 10) / 100 * scrollView.__clientHeight);
+        }
+        return result;
+      };
+      var widthGetter = function(scope, locals) {
+        var result = widthParsed(scope, locals);
+        if (angular.isString(result) && result.indexOf('%') > -1) {
+          return Math.floor(parseInt(result, 10) / 100 * scrollView.__clientWidth);
+        }
+        return result;
+      };
+
+      var match = $attr.collectionRepeat.match(/^\s*([\s\S]+?)\s+in\s+([\s\S]+?)(?:\s+track\s+by\s+([\s\S]+?))?\s*$/);
+      if (!match) {
+        throw new Error("collection-repeat expected expression in form of '_item_ in _collection_[ track by _id_]' but got '" + $attr.collectionRepeat + "'.");
+      }
+
+      var dataSource = new $collectionDataSource({
+        scope: $scope,
+        transcludeFn: $transclude,
+        transcludeParent: $element.parent(),
+        keyExpr: match[1],
+        listExpr: match[2],
+        trackByExpr: match[3],
+        heightGetter: heightGetter,
+        widthGetter: widthGetter
+      });
+      var collectionRepeatManager = new $collectionRepeatManager({
+        dataSource: dataSource,
+        element: scrollCtrl.$element,
+        scrollView: scrollCtrl.scrollView,
+      });
+
+      $scope.$watchCollection(dataSource.listExpr, function(value) {
+        if (value && !angular.isArray(value)) {
+          throw new Error("collection-repeat expects an array to repeat over, but instead got '" + typeof value + "'.");
+        }
+        rerender(value);
+      });
+
+      function rerender(value) {
+        scrollView.resize();
+        dataSource.setData(value);
+        collectionRepeatManager.resize();
+      }
+      var resize = angular.bind(collectionRepeatManager, collectionRepeatManager.resize);
+      ionic.on('resize', function() {
+        rerender($scope.$eval(dataSource.listExpr));
+      }, window);
+
+      $scope.$on('$destroy', function() {
+        collectionRepeatManager.destroy();
+        dataSource.destroy();
+        ionic.off('resize', resize, window);
+      });
+    }
+  };
+}]);
 
 /**
  * @ngdoc directive
@@ -35691,8 +36587,16 @@ function tapScrollToTopDirective() {
         });
 
         function onTap(e) {
-          if (ionic.DomUtil.getParentOrSelfWithClass(e.target, 'button', 4)) {
-            return;
+          var depth = 3;
+          var current = e.target;
+          //Don't scroll to top in certain cases
+          while (depth-- && current) {
+            if (current.classList.contains('button') ||
+                current.tagName.match(/input|textarea|select/i) ||
+                current.isContentEditable) {
+              return;
+            }
+            current = current.parentNode;
           }
           var touch = e.gesture && e.gesture.touches[0] || e.detail.touches[0];
           var bounds = $element[0].getBoundingClientRect();
@@ -35724,26 +36628,26 @@ function headerFooterBarDirective(isHeader) {
           });
 
           var el = $element[0];
-          //just incase header is on rootscope
-          var parentScope = $scope.$parent || $scope;
 
           if (isHeader) {
             $scope.$watch(function() { return el.className; }, function(value) {
               var isSubheader = value.indexOf('bar-subheader') !== -1;
-              parentScope.$hasHeader = !isSubheader;
-              parentScope.$hasSubheader = isSubheader;
+              $scope.$hasHeader = !isSubheader;
+              $scope.$hasSubheader = isSubheader;
             });
             $scope.$on('$destroy', function() {
-              parentScope.$hasHeader = parentScope.$hasSubheader = null;
+              delete $scope.$hasHeader;
+              delete $scope.$hasSubheader;
             });
           } else {
             $scope.$watch(function() { return el.className; }, function(value) {
               var isSubfooter = value.indexOf('bar-subfooter') !== -1;
-              parentScope.$hasFooter = !isSubfooter;
-              parentScope.$hasSubfooter = isSubfooter;
+              $scope.$hasFooter = !isSubfooter;
+              $scope.$hasSubfooter = isSubfooter;
             });
             $scope.$on('$destroy', function() {
-              parentScope.$hasFooter = parentScope.$hasSubfooter = null;
+              delete $scope.$hasFooter;
+              delete $scope.$hasSubfooter;
             });
             $scope.$watch('$hasTabs', function(val) {
               $element.toggleClass('has-tabs', !!val);
@@ -35793,7 +36697,7 @@ function headerFooterBarDirective(isHeader) {
  *       $scope.$broadcast('scroll.infiniteScrollComplete');
  *     });
  *   };
- * 
+ *
  *   $scope.$on('stateChangeSuccess', function() {
  *     $scope.loadMore();
  *   });
@@ -35888,10 +36792,6 @@ IonicModule
         var scrollValues = scrollView.getValues();
         var maxScroll = infiniteScrollCtrl.getMaxScroll();
 
-        if(maxScroll.top === 0) {
-          return;
-        }
-             
         if ((maxScroll.left !== -1 && scrollValues.left >= maxScroll.left) ||
             (maxScroll.top !== -1 && scrollValues.top >= maxScroll.top)) {
           onInfinite();
@@ -35945,7 +36845,7 @@ function($animate, $compile) {
       var isAnchor = angular.isDefined($attrs.href) || angular.isDefined($attrs.ngHref);
       var isComplexItem = isAnchor ||
         //Lame way of testing, but we have to know at compile what to do with the element
-        /ion-(delete|option|reorder)-button/.test($element.html());
+        /ion-(delete|option|reorder)-button/i.test($element.html());
 
         if (isComplexItem) {
           var innerElement = angular.element(isAnchor ? ITEM_TPL_CONTENT_ANCHOR : ITEM_TPL_CONTENT);
@@ -36009,7 +36909,7 @@ IonicModule
     compile: function($element, $attr) {
       //Add the classes we need during the compile phase, so that they stay
       //even if something else like ngIf removes the element and re-addss it
-      $attr.$set('class', ($attr.class || '') + ' button icon button-icon', true);
+      $attr.$set('class', ($attr['class'] || '') + ' button icon button-icon', true);
       return function($scope, $element, $attr, ctrls) {
         var itemCtrl = ctrls[0];
         var listCtrl = ctrls[1];
@@ -36061,13 +36961,15 @@ return {
   require: '^ionItem',
   priority: Number.MAX_VALUE,
   compile: function($element, $attr) {
-    $attr.$set('class', ($attr.class || '') + ' button', true);
+    $attr.$set('class', ($attr['class'] || '') + ' button', true);
     return function($scope, $element, $attr, itemCtrl) {
       if (!itemCtrl.optionsContainer) {
         itemCtrl.optionsContainer = angular.element(ITEM_TPL_OPTION_BUTTONS);
         itemCtrl.$element.append(itemCtrl.optionsContainer);
       }
       itemCtrl.optionsContainer.append($element);
+
+      $element.on('click', eventStopPropagation);
     };
   }
 };
@@ -36127,7 +37029,7 @@ IonicModule
     require: ['^ionItem', '^ionList'],
     priority: Number.MAX_VALUE,
     compile: function($element, $attr) {
-      $attr.$set('class', ($attr.class || '') + ' button icon button-icon', true);
+      $attr.$set('class', ($attr['class'] || '') + ' button icon button-icon', true);
       $element[0].setAttribute('data-prevent-scroll', true);
       return function($scope, $element, $attr, ctrls) {
         var itemCtrl = ctrls[0];
@@ -36287,9 +37189,11 @@ function($animate, $timeout) {
             if (!isShown && !wasShown) { return; }
 
             if (isShown) listCtrl.closeOptionButtons();
+            listCtrl.canSwipeItems(!isShown);
 
             $element.children().toggleClass('list-left-editing', isShown);
             toggleNgHide('.item-delete.item-left-edit', isShown);
+            toggleTapDisabled('.item-content', isShown);
           });
           $scope.$watch(function() {
             return listCtrl.showReorder();
@@ -36298,17 +37202,29 @@ function($animate, $timeout) {
             if (!isShown && !wasShown) { return; }
 
             if (isShown) listCtrl.closeOptionButtons();
-            listCtrl.showReorder(isShown);
+            listCtrl.canSwipeItems(!isShown);
 
             $element.children().toggleClass('list-right-editing', isShown);
             toggleNgHide('.item-reorder.item-right-edit', isShown);
+            toggleTapDisabled('.item-content', isShown);
           });
 
           function toggleNgHide(selector, shouldShow) {
             angular.forEach($element[0].querySelectorAll(selector), function(node) {
-              if (shouldShow) $animate.removeClass(angular.element(node), 'ng-hide');
-              else $animate.addClass(angular.element(node), 'ng-hide');
+              if (shouldShow) {
+                $animate.removeClass(angular.element(node), 'ng-hide');
+              } else {
+                $animate.addClass(angular.element(node), 'ng-hide');
+              }
             });
+          }
+          function toggleTapDisabled(selector, shouldDisable) {
+            var el = angular.element($element[0].querySelectorAll(selector));
+            if (shouldDisable) {
+              el.attr('data-tap-disabled', 'true');
+            } else {
+              el.removeAttr('data-tap-disabled');
+            }
           }
         }
 
@@ -36424,8 +37340,8 @@ IonicModule
  *
  * ```html
  * <ion-nav-bar>
- *   <ion-nav-back-button class="button-icon">
- *     <i class="ion-arrow-left-c"></i> Back!
+ *   <ion-nav-back-button class="button-clear">
+ *     <i class="ion-arrow-left-c"></i> Back
  *   </ion-nav-back-button>
  * </ion-nav-bar>
  * ```
@@ -36434,7 +37350,7 @@ IonicModule
  *
  * ```html
  * <ion-nav-bar ng-controller="MyCtrl">
- *   <ion-nav-back-button class="button-icon"
+ *   <ion-nav-back-button class="button-clear"
  *     ng-click="canGoBack && goBack()">
  *     <i class="ion-arrow-left-c"></i> Back
  *   </ion-nav-back-button>
@@ -36453,8 +37369,8 @@ IonicModule
  *
  * ```html
  * <ion-nav-bar ng-controller="MyCtrl">
- *   <ion-nav-back-button class="button button-icon ion-arrow-left-c">
- *     {% raw %}{{getPreviousTitle() || 'Back'}}{% endraw %}
+ *   <ion-nav-back-button class="button-icon">
+ *     <i class="icon ion-arrow-left-c"></i>{% raw %}{{getPreviousTitle() || 'Back'}}{% endraw %}
  *   </ion-nav-back-button>
  * </ion-nav-bar>
  * ```
@@ -36659,7 +37575,9 @@ IonicModule
         $compile(buttons)($scope);
 
         //Append buttons to navbar
-        $animate.enter(buttons, navElement);
+        ionic.requestAnimationFrame(function() {
+          $animate.enter(buttons, navElement);
+        });
 
         //When our ion-nav-buttons container is destroyed,
         //destroy everything in the navbar
@@ -36764,12 +37682,14 @@ function($ionicViewService, $location, $state, $window, $rootScope) {
  * the {@link ionic.directive:ionNavBar} directive that updates as we navigate through the
  * navigation stack.
  *
- * You can any [animation class](/docs/components#animation) on the navView to have its pages slide.
+ * You can use any [animation class](/docs/components#animation) on the navView's `animation` attribute
+ * to have its pages animate.
+ *
  * Recommended for page transitions: 'slide-left-right', 'slide-left-right-ios7', 'slide-in-up'.
  *
  * ```html
  * <ion-nav-bar></ion-nav-bar>
- * <ion-nav-view class="slide-left-right">
+ * <ion-nav-view animation="slide-left-right">
  *   <!-- Center content -->
  * </ion-nav-view>
  * ```
@@ -36971,16 +37891,16 @@ IonicModule
 }])
 
 .directive('ionStopEvent', function () {
-  function stopEvent(e) {
-    e.stopPropagation();
-  }
   return {
     restrict: 'A',
     link: function (scope, element, attr) {
-      element.bind(attr.ionStopEvent, stopEvent);
+      element.bind(attr.ionStopEvent, eventStopPropagation);
     }
   };
 });
+function eventStopPropagation(e) {
+  e.stopPropagation();
+}
 
 
 /**
@@ -37029,7 +37949,8 @@ IonicModule
       ngModel: '=?',
       ngValue: '=?',
       ngChange: '&',
-      icon: '@'
+      icon: '@',
+      name: '@'
     },
     transclude: true,
     template: '<label class="item item-radio">' +
@@ -37165,6 +38086,9 @@ IonicModule
  * @param {expression=} on-scroll Called whenever the user scrolls.
  * @param {boolean=} scrollbar-x Whether to show the horizontal scrollbar. Default false.
  * @param {boolean=} scrollbar-y Whether to show the vertical scrollbar. Default true.
+ * @param {boolean=} zooming Whether to support pinch-to-zoom
+ * @param {integer=} min-zoom The smallest zoom amount allowed (default is 0.5)
+ * @param {integer=} max-zoom The largest zoom amount allowed (default is 3)
  */
 IonicModule
 .directive('ionScroll', [
@@ -37195,6 +38119,9 @@ function($timeout, $controller, $ionicBind) {
           scroll: '@',
           scrollbarX: '@',
           scrollbarY: '@',
+          zooming: '@',
+          minZoom: '@',
+          maxZoom: '@'
         });
 
         if (angular.isDefined($attr.padding)) {
@@ -37216,7 +38143,10 @@ function($timeout, $controller, $ionicBind) {
           scrollbarX: $scope.$eval($scope.scrollbarX) !== false,
           scrollbarY: $scope.$eval($scope.scrollbarY) !== false,
           scrollingX: $scope.direction.indexOf('x') >= 0,
-          scrollingY: $scope.direction.indexOf('y') >= 0
+          scrollingY: $scope.direction.indexOf('y') >= 0,
+          zooming: $scope.$eval($scope.zooming) === true,
+          maxZoom: $scope.$eval($scope.maxZoom) || 3,
+          minZoom: $scope.$eval($scope.minZoom) || 0.5
         };
         if (isPaging) {
           scrollViewOptions.speedMultiplier = 0.8;
@@ -37502,7 +38432,7 @@ IonicModule
  *   <ion-slide>
  *     <div class="box yellow"><h1>YELLOW</h1></div>
  *   </ion-slide>
- *   <ion-slide>
+ *   <ion-slide on-slide-changed="slideHasChanged(index)">
  *     <div class="box pink"><h1>PINK</h1></div>
  *   </ion-slide>
  * </ion-slide-box>
@@ -37719,16 +38649,11 @@ function($rootScope, $animate, $ionicBind, $compile) {
     controller: '$ionicTab',
     scope: true,
     compile: function(element, attr) {
-      var navView = element[0].querySelector('ion-nav-view') ||
-        element[0].querySelector('data-ion-nav-view');
-      var navViewName = navView && navView.getAttribute('name');
 
-
-      //We create the tabNavElement in the compile phase so that the
+      //We create the tabNavTemplate in the compile phase so that the
       //attributes we pass down won't be interpolated yet - we want
       //to pass down the 'raw' versions of the attributes
-      var tabNavElement = angular.element(
-        '<ion-tab-nav' +
+      var tabNavTemplate = '<ion-tab-nav' +
         attrStr('ng-click', attr.ngClick) +
         attrStr('title', attr.title) +
         attrStr('icon', attr.icon) +
@@ -37736,8 +38661,7 @@ function($rootScope, $animate, $ionicBind, $compile) {
         attrStr('icon-off', attr.iconOff) +
         attrStr('badge', attr.badge) +
         attrStr('badge-style', attr.badgeStyle) +
-        '></ion-tab-nav>'
-      );
+        '></ion-tab-nav>';
 
       //Remove the contents of the element so we can compile them later, if tab is selected
       //We don't use regular transclusion because it breaks element inheritance
@@ -37749,6 +38673,10 @@ function($rootScope, $animate, $ionicBind, $compile) {
         var childElement;
         var tabsCtrl = ctrls[0];
         var tabCtrl = ctrls[1];
+
+        var navView = tabContent[0].querySelector('ion-nav-view') ||
+          tabContent[0].querySelector('data-ion-nav-view');
+        var navViewName = navView && navView.getAttribute('name');
 
         $ionicBind($scope, $attr, {
           animate: '=',
@@ -37780,6 +38708,7 @@ function($rootScope, $animate, $ionicBind, $compile) {
           }
         }
 
+        var tabNavElement = angular.element(tabNavTemplate);
         tabNavElement.data('$ionTabsController', tabsCtrl);
         tabNavElement.data('$ionTabController', tabCtrl);
         tabsCtrl.$tabsElement.append($compile(tabNavElement)($scope));
@@ -37936,7 +38865,8 @@ IonicModule
           $scope.$hasTabsTop = isTabsTop && !isHidden;
         });
         $scope.$on('$destroy', function() {
-          $scope.$hasTabs = $scope.$hasTabsTop = null;
+          delete $scope.$hasTabs;
+          delete $scope.$hasTabsTop;
         });
       }
     }
@@ -37976,11 +38906,11 @@ function($ionicGesture, $timeout) {
       ngDisabled: '=?'
     },
     transclude: true,
-    template: '<div class="item item-toggle disable-pointer-events">' +
+    template: '<div class="item item-toggle">' +
                 '<div ng-transclude></div>' +
-                '<label class="toggle enable-pointer-events">' +
+                '<label class="toggle">' +
                   '<input type="checkbox" ng-model="ngModel" ng-value="ngValue" ng-change="ngChange()" ng-disabled="ngDisabled">' +
-                  '<div class="track disable-pointer-events">' +
+                  '<div class="track">' +
                     '<div class="handle"></div>' +
                   '</div>' +
                 '</label>' +
@@ -38088,12 +39018,18 @@ IonicModule
 
         }
 
-        $scope.$watch($attr.hideBackButton, function(value) {
+        var hideBackAttr = angular.isDefined($attr.hideBackButton) ?
+          $attr.hideBackButton :
+          'false';
+        $scope.$watch(hideBackAttr, function(value) {
           // Should we hide a back button when this tab is shown
           navBarCtrl.showBackButton(!value);
         });
 
-        $scope.$watch($attr.hideNavBar, function(value) {
+        var hideNavAttr = angular.isDefined($attr.hideNavBar) ?
+          $attr.hideNavBar :
+          'false';
+        $scope.$watch(hideNavAttr, function(value) {
           // Should the nav bar be hidden for this view or not?
           navBarCtrl.showBar(!value);
         });

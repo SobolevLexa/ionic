@@ -18,6 +18,9 @@
  * See the {@link ionic.directive:ionTab} directive's documentation for more details on
  * individual tabs.
  *
+ * Note: do not place ion-tabs inside of an ion-content element; it has been known to cause a
+ * certain CSS bug.
+ *
  * @usage
  * ```html
  * <ion-tabs class="tabs-positive tabs-icon-only">
@@ -75,7 +78,8 @@ IonicModule
           $scope.$hasTabsTop = isTabsTop && !isHidden;
         });
         $scope.$on('$destroy', function() {
-          $scope.$hasTabs = $scope.$hasTabsTop = null;
+          delete $scope.$hasTabs;
+          delete $scope.$hasTabsTop;
         });
       }
     }

@@ -24,9 +24,9 @@
  * ```
  *
  * @param {string=} title The title to display on the parent {@link ionic.directive:ionNavBar}.
- * @param {boolean=} hideBackButton Whether to hide the back button on the parent
+ * @param {boolean=} hide-back-button Whether to hide the back button on the parent
  * {@link ionic.directive:ionNavBar} by default.
- * @param {boolean=} hideNavBar Whether to hide the parent
+ * @param {boolean=} hide-nav-bar Whether to hide the parent
  * {@link ionic.directive:ionNavBar} by default.
  */
 IonicModule
@@ -59,12 +59,18 @@ IonicModule
 
         }
 
-        $scope.$watch($attr.hideBackButton, function(value) {
+        var hideBackAttr = angular.isDefined($attr.hideBackButton) ?
+          $attr.hideBackButton :
+          'false';
+        $scope.$watch(hideBackAttr, function(value) {
           // Should we hide a back button when this tab is shown
           navBarCtrl.showBackButton(!value);
         });
 
-        $scope.$watch($attr.hideNavBar, function(value) {
+        var hideNavAttr = angular.isDefined($attr.hideNavBar) ?
+          $attr.hideNavBar :
+          'false';
+        $scope.$watch(hideNavAttr, function(value) {
           // Should the nav bar be hidden for this view or not?
           navBarCtrl.showBar(!value);
         });

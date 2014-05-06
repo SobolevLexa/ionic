@@ -35,14 +35,12 @@ function($animate, $compile) {
       this.$scope = $scope;
       this.$element = $element;
     }],
-    priorty: Number.MAX_VALUE,
-    require: ['ionItem', '^ionList'],
     scope: true,
     compile: function($element, $attrs) {
       var isAnchor = angular.isDefined($attrs.href) || angular.isDefined($attrs.ngHref);
       var isComplexItem = isAnchor ||
         //Lame way of testing, but we have to know at compile what to do with the element
-        /ion-(delete|option|reorder)-button/.test($element.html());
+        /ion-(delete|option|reorder)-button/i.test($element.html());
 
         if (isComplexItem) {
           var innerElement = angular.element(isAnchor ? ITEM_TPL_CONTENT_ANCHOR : ITEM_TPL_CONTENT);

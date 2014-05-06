@@ -27,7 +27,25 @@ describe('bar directives', function() {
         el.scope().$destroy();
         expect(ionic.off).toHaveBeenCalledWith('tap', callback, el[0]);
       });
-      it('should ignore tap if it\'s in a button', function() {
+      ['input','textarea','select'].forEach(function(tag) {
+        it('should ignore tap if it\'s in a ' + tag, function() {
+          var el = setup();
+          spyOn(ionic.DomUtil, 'rectContains');
+          var child = angular.element('<' + tag + '>');
+          el.append(child);
+          ionic.trigger('tap', { target: child[0] }, true, true);
+          expect(ionic.DomUtil.rectContains).not.toHaveBeenCalled();
+        });
+      });
+      it('should ignore tap if it\'s in a [contenteditable]', function() {
+        var el = setup();
+        spyOn(ionic.DomUtil, 'rectContains');
+        var child = angular.element('<div contenteditable>');
+        el.append(child);
+        ionic.trigger('tap', { target: child[0] }, true, true);
+        expect(ionic.DomUtil.rectContains).not.toHaveBeenCalled();
+      });
+      it('should ignore tap if it\'s in a .button', function() {
         var el = setup();
         spyOn(ionic.DomUtil, 'rectContains');
         var child = angular.element('<div class="button">');
@@ -80,7 +98,7 @@ describe('bar directives', function() {
       if (data.tag === 'ion-header-bar') {
         it('$hasHeader $hasSubheader', function() {
           var el = setup();
-          var scope = el.scope().$parent;
+          var scope = el.scope();
           expect(scope.$hasHeader).toEqual(true);
           expect(scope.$hasSubheader).toEqual(false);
           el.addClass('bar-subheader');
@@ -95,7 +113,7 @@ describe('bar directives', function() {
       } else {
         it('$hasFooter $hasSubheader', function() {
           var el = setup();
-          var scope = el.scope().$parent;
+          var scope = el.scope();
           expect(scope.$hasFooter).toEqual(true);
           expect(scope.$hasSubfooter).toEqual(false);
           el.addClass('bar-subfooter');
@@ -109,7 +127,7 @@ describe('bar directives', function() {
         });
         it('.has-tabs', function() {
           var el = setup();
-          var scope = el.scope().$parent;
+          var scope = el.scope();
           expect(el.hasClass('has-tabs')).toBe(false);
           scope.$apply('$hasTabs = true');
           expect(el.hasClass('has-tabs')).toBe(true);

@@ -18,8 +18,8 @@
  *
  * ```html
  * <ion-nav-bar>
- *   <ion-nav-back-button class="button-icon">
- *     <i class="ion-arrow-left-c"></i> Back!
+ *   <ion-nav-back-button class="button-clear">
+ *     <i class="ion-arrow-left-c"></i> Back
  *   </ion-nav-back-button>
  * </ion-nav-bar>
  * ```
@@ -28,7 +28,7 @@
  *
  * ```html
  * <ion-nav-bar ng-controller="MyCtrl">
- *   <ion-nav-back-button class="button-icon"
+ *   <ion-nav-back-button class="button-clear"
  *     ng-click="canGoBack && goBack()">
  *     <i class="ion-arrow-left-c"></i> Back
  *   </ion-nav-back-button>
@@ -47,8 +47,8 @@
  *
  * ```html
  * <ion-nav-bar ng-controller="MyCtrl">
- *   <ion-nav-back-button class="button button-icon ion-arrow-left-c">
- *     {% raw %}{{getPreviousTitle() || 'Back'}}{% endraw %}
+ *   <ion-nav-back-button class="button-icon">
+ *     <i class="icon ion-arrow-left-c"></i>{% raw %}{{getPreviousTitle() || 'Back'}}{% endraw %}
  *   </ion-nav-back-button>
  * </ion-nav-bar>
  * ```
@@ -63,7 +63,14 @@
 IonicModule
 .directive('ionNavBackButton', [
   '$animate',
-function($animate) {
+  '$rootScope',
+function($animate, $rootScope) {
+  var backIsShown = false;
+  //If the current viewstate does not allow a back button,
+  //always hide it.
+  $rootScope.$on('$viewHistory.historyChange', function(e, data) {
+    backIsShown = !!data.showBack;
+  });
   return {
     restrict: 'E',
     require: '^ionNavBar',
@@ -79,19 +86,11 @@ function($animate) {
           });
         }
 
-        //If the current viewstate does not allow a back button,
-        //always hide it.
-        var deregisterListener = $scope.$parent.$on(
-          '$viewHistory.historyChange',
-          function(e, data) {
-            $scope.hasBackButton = !!data.showBack;
-          }
-        );
-        $scope.$on('$destroy', deregisterListener);
-
         //Make sure both that a backButton is allowed in the first place,
         //and that it is shown by the current view.
-        $scope.$watch('!!(backButtonShown && hasBackButton)', ionic.animationFrameThrottle(function(show) {
+        $scope.$watch(function() {
+          return !!(backIsShown && $scope.backButtonShown);
+        }, ionic.animationFrameThrottle(function(show) {
           if (show) $animate.removeClass($element, 'ng-hide');
           else $animate.addClass($element, 'ng-hide');
         }));

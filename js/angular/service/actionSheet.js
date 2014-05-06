@@ -24,7 +24,7 @@
  *    // Show the action sheet
  *    $ionicActionSheet.show({
  *      buttons: [
- *        { text: 'Share' },
+ *        { text: '<b>Share</b> This' },
  *        { text: 'Move' },
  *      ],
  *      destructiveText: 'Delete',
@@ -107,9 +107,12 @@ function($rootScope, $document, $compile, $animate, $timeout, $ionicTemplateLoad
       };
 
       // Support Android back button to close
-      scope.$deregisterBackButton = $ionicPlatform.registerBackButtonAction(function(){
-        hideSheet();
-      }, 300);
+      scope.$deregisterBackButton = $ionicPlatform.registerBackButtonAction(
+        function(){
+          hideSheet();
+        },
+        PLATFORM_BACK_BUTTON_PRIORITY_ACTION_SHEET
+      );
 
       scope.cancel = function() {
         hideSheet(true);

@@ -8,7 +8,7 @@ ARG_DEFS=(
 function init {
   # If we are on travis, set our git credentials to make the travis commits look better
   if [[ "$TRAVIS" == "true" ]]; then
-    git config --global user.name 'Ionotron'
+    git config --global user.name 'Ionitron'
     git config --global user.email hi@ionicframework.com
     export GH_ORG=driftyco
     export RELEASE_REMOTE=origin
@@ -49,7 +49,6 @@ function run {
   mkdir -p tmp
   git show $TRAVIS_COMMIT~1:package.json > tmp/package.old.json
   OLD_VERSION=$(readJsonProp "tmp/package.old.json" "version")
-  OLD_CODENAME=$(readJsonProp "tmp/package.old.json" "codename")
   VERSION=$(readJsonProp "package.json" "version")
   CODENAME=$(readJsonProp "package.json" "codename")
 
@@ -94,10 +93,11 @@ function run {
 
     VERSION_NAME="nightly"
 
-    gulp changelog --no-prepend \
+    gulp changelog --standalone \
       --html=true \
       --subtitle="(changes since $OLD_VERSION)" \
-      --dest="dist/CHANGELOG.html"
+      --dest="dist/CHANGELOG.html" \
+      --from="$(git tag | grep $OLD_VERSION)"
   fi
 
   ./scripts/site/publish.sh \

@@ -69,6 +69,16 @@
             <input type="checkbox" ng-model="toggle2" ng-true-value="yup" ng-false-value="nope">,
           </div>
 
+          <li ng-if="true" class="item item-toggle">
+            <label class="toggle">
+              <input type="checkbox">
+              <div class="track">
+                <div class="handle"></div>
+              </div>
+            </label>
+            HTML Only
+          </li>
+
           <div class="item item-divider">
             Radio
           </div>
@@ -147,6 +157,17 @@
               <option>Yavin</option>
             </select>
           </label>
+
+          <div class="item item-input item-select">
+            <div class="input-label">
+              Country
+            </div>
+            <select>
+              <option>Great Britain</option>
+              <option selected>Saint Vincent and the Grenadines option should be a text overflow issue</option>
+              <option>United States</option>
+            </select>
+          </div>
 
           <div class="item item-divider">
             Other Tests
