@@ -420,7 +420,8 @@ window.ionic = {
 
   // Custom event polyfill
   ionic.CustomEvent = window.CustomEvent || (function() {
-    function CustomEvent(event, params) {
+    var CustomEvent;
+    CustomEvent = function(event, params) {
       var evt;
       params = params || {
         bubbles: false,
@@ -441,6 +442,7 @@ window.ionic = {
       return evt;
     }
     CustomEvent.prototype = window.Event.prototype;
+    return CustomEvent;
   })();
 
 
@@ -2385,41 +2387,59 @@ window.ionic = {
  * @name tap
  * @module ionic
  * @description
- * This is the tap page.
+ * On touch devices such as a phone or tablet, some browsers implement a 300ms delay between
+ * the time the user stops touching the display and the moment the browser executes the
+ * click. This delay was initially introduced so the browser can know whether the user wants to
+ * double-tap to zoom in on the webpage.  Basically, the browser waits roughly 300ms to see if
+ * the user is double-tapping, or just tapping on the display once.
  *
- * - data-tap-disabled
- * - why not ngTouch and fastclick?
- * - ionic keyboard plugin
- * - other notes
+ * Out of the box, Ionic automatically removes the 300ms delay in order to make Ionic apps
+ * feel more "native" like. Resultingly, other solutions such as
+ * [fastclick](https://github.com/ftlabs/fastclick) and Angular's
+ * [ngTouch](https://docs.angularjs.org/api/ngTouch) should not be included, to avoid conflicts.
+ *
+ * In some cases, third-party libraries may also be working with touch events which can interfere
+ * with the tap system. For example, mapping libraries like Google or Leaflet Maps often implement
+ * a touch detection system which conflicts with Ionic's tap system.
+ *
+ * ### Disabling the tap system
+ *
+ * To disable the tap for an element and all of its children elements,
+ * add the attribute `data-tap-disabled="true"`.
+ *
+ * ```html
+ * <div data-tap-disabled="true">
+ *     <div id="google-map"></div>
+ * </div>
+ * ```
+ *
+ * ### Additional Notes:
+ *
+ * - Ionic tap  works with Ionic's JavaScript scrolling
+ * - Elements can come and go from the DOM and Ionic tap doesn't keep adding and removing
+ *   listeners
+ * - No "tap delay" after the first "tap" (you can tap as fast as you want, they all click)
+ * - Minimal events listeners, only being added to document
+ * - Correct focus in/out on each input type (select, textearea, range) on each platform/device
+ * - Shows and hides virtual keyboard correctly for each platform/device
+ * - Works with labels surrounding inputs
+ * - Does not fire off a click if the user moves the pointer too far
+ * - Adds and removes an 'activated' css class
+ * - Multiple [unit tests](https://github.com/driftyco/ionic/blob/master/test/unit/utils/tap.unit.js) for each scenario
+ *
  */
 /*
 
  IONIC TAP
  ---------------
  - Both touch and mouse events are added to the document.body on DOM ready
- - If a touch event happens, it removes the mouse event listeners (temporarily)
- - Remembers the last touchstart event
+ - If a touch event happens, it does not use mouse event listeners
  - On touchend, if the distance between start and end was small, trigger a click
  - In the triggered click event, add a 'isIonicTap' property
  - The triggered click receives the same x,y coordinates as as the end event
  - On document.body click listener (with useCapture=true), only allow clicks with 'isIonicTap'
- - After XXms, bring back the mouse event listeners incase they switch from touch and mouse
- - If no touch events and only mouse, then touch events never fire, only mouse
  - Triggering clicks with mouse events work the same as touch, except with mousedown/mouseup
  - Tapping inputs is disabled during scrolling
-
- - Does not require other libraries to hook into ionic.tap, it just works
- - Elements can come and go from the DOM and it doesn't have to keep adding and removing listeners
- - No "tap delay" after the first "tap" (you can tap as fast as you want, they all click)
- - Minimal events listeners, only being added to document.body
- - Correct focus in/out on each input type on each platform/device
- - Shows and hides virtual keyboard correctly for each platform/device
- - No user-agent sniffing
- - Works with labels surrounding inputs
- - Does not fire off a click if the user moves the pointer too far
- - Adds and removes an 'activated' css class
- - Multiple unit tests for each scenario
-
 */
 
 var tapDoc; // the element which the listeners are on (document.body)
@@ -38970,6 +38990,7 @@ IonicModule
 ]));
 
 var PLATFORM_BACK_BUTTON_PRIORITY_VIEW = 100;
+var PLATFORM_BACK_BUTTON_PRIORITY_SIDE_MENU = 150;
 var PLATFORM_BACK_BUTTON_PRIORITY_ACTION_SHEET = 300;
 var PLATFORM_BACK_BUTTON_PRIORITY_POPUP = 400;
 var PLATFORM_BACK_BUTTON_PRIORITY_LOADING = 500;
@@ -41172,8 +41193,12 @@ IonicModule
   '$scope',
   '$attrs',
   '$ionicSideMenuDelegate',
-function($scope, $attrs, $ionicSideMenuDelegate) {
+  '$ionicPlatform',
+function($scope, $attrs, $ionicSideMenuDelegate, $ionicPlatform) {
+  var self = this;
   angular.extend(this, ionic.controllers.SideMenuController.prototype);
+
+  this.$scope = $scope;
 
   ionic.controllers.SideMenuController.call(this, {
     left: { width: 275 },
@@ -41197,10 +41222,28 @@ function($scope, $attrs, $ionicSideMenuDelegate) {
 
   $scope.sideMenuContentTranslateX = 0;
 
+
+  var deregisterBackButtonAction = angular.noop;
+  var closeSideMenu = angular.bind(this, this.close);
+  $scope.$watch(function() {
+    return self.getOpenAmount() !== 0;
+  }, function(isOpen) {
+    deregisterBackButtonAction();
+    if (isOpen) {
+      deregisterBackButtonAction = $ionicPlatform.registerBackButtonAction(
+        closeSideMenu,
+        PLATFORM_BACK_BUTTON_PRIORITY_SIDE_MENU
+      );
+    }
+  });
+
   var deregisterInstance = $ionicSideMenuDelegate._registerInstance(
     this, $attrs.delegateHandle
   );
-  $scope.$on('$destroy', deregisterInstance);
+  $scope.$on('$destroy', function() {
+    deregisterInstance();
+    deregisterBackButtonAction();
+  });
 }]);
 
 IonicModule
