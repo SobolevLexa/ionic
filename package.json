@@ -1,13 +1,10 @@
 {
   "name": "ionic",
   "private": false,
-  "version": "1.0.0-beta.3",
-  "codename": "americium",
-  "changelog": "http://git.io/wliUjg",
+  "version": "1.0.0-beta.4",
+  "codename": "antimony-antelope",
   "repository": {
-    "url": "git://github.com/driftyco/ionic.git",
-    "changelogUrl": "http://git.io/LoDTyQ",
-    "downloadUrl": "http://git.io/EHfQ_g"
+    "url": "git://github.com/driftyco/ionic.git"
   },
   "devDependencies": {
     "karma": "~0.11.13",

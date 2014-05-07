@@ -2,7 +2,7 @@
  * Copyright 2014 Drifty Co.
  * http://drifty.com/
  *
- * Ionic, v1.0.0-beta.3
+ * Ionic, v1.0.0-beta.4
  * A powerful HTML5 mobile app framework.
  * http://ionicframework.com/
  *
@@ -19,7 +19,7 @@
 window.ionic = {
   controllers: {},
   views: {},
-  version: '1.0.0-beta.3'
+  version: '1.0.0-beta.4'
 };
 
 (function(ionic) {
@@ -3196,6 +3196,7 @@ function keyboardInit() {
 }
 
 function keyboardNativeShow(e) {
+  clearTimeout(keyboardFocusOutTimer);
   ionic.keyboard.height = e.keyboardHeight;
 }
 
@@ -3222,9 +3223,15 @@ function keyboardSetShow(e) {
     var keyboardHeight; 
     var elementBounds = keyboardActiveElement.getBoundingClientRect();
     var count = 0;
+<<<<<<< HEAD
 
     var pollKeyboardHeight = setInterval(function(){
 
+=======
+
+    var pollKeyboardHeight = setInterval(function(){
+
+>>>>>>> upstream/master
       keyboardHeight = keyboardGetHeight();
       if (count > 10){
         clearInterval(pollKeyboardHeight);
@@ -3484,11 +3491,19 @@ function viewportUpdate() {
 
       if( p.isWebView() ) {
         // iPad <= 7.0 WebView
+<<<<<<< HEAD
 
         if( orientation == 90 ) {
           // iPad <= 7.0 WebView Landscape
           viewportProperties.height = '0';
 
+=======
+
+        if( orientation == 90 ) {
+          // iPad <= 7.0 WebView Landscape
+          viewportProperties.height = '0';
+
+>>>>>>> upstream/master
         } else if(version == 7) {
           // iPad <= 7.0 WebView Portait
           viewportProperties.height = DEVICE_HEIGHT;
