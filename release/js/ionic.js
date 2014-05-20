@@ -450,11 +450,7 @@ window.ionic = {
         evt.initEvent(event, params.bubbles, params.cancelable);
       }
       return evt;
-<<<<<<< HEAD
-    }
-=======
     };
->>>>>>> upstream/master
     customEvent.prototype = window.Event.prototype;
     return customEvent;
   })();
@@ -2491,7 +2487,9 @@ var tapTouchFocusedInput;
 var tapLastTouchTarget;
 var tapTouchMoveListener = 'touchmove';
 
-var TAP_RELEASE_TOLERANCE = 6; // how much the coordinates can be off between start/end, but still a click
+// how much the coordinates can be off between start/end, but still a click
+var TAP_RELEASE_TOLERANCE = 6; // default tolerance
+var TAP_RELEASE_BUTTON_TOLERANCE = 50; // button elements should have a larger tolerance
 
 var tapEventListeners = {
   'click': tapClickGateKeeper,
@@ -2564,16 +2562,16 @@ ionic.tap = {
   ignoreScrollStart: function(e) {
     return (e.defaultPrevented) ||  // defaultPrevented has been assigned by another component handling the event
            (e.target.isContentEditable) ||
-           (/file|range/i).test(e.target.type) ||
+           (/^(file|range)$/i).test(e.target.type) ||
            (e.target.dataset ? e.target.dataset.preventScroll : e.target.getAttribute('data-prevent-default')) == 'true' || // manually set within an elements attributes
-           (!!(/object|embed/i).test(e.target.tagName));  // flash/movie/object touches should not try to scroll
+           (!!(/^(object|embed)$/i).test(e.target.tagName));  // flash/movie/object touches should not try to scroll
   },
 
   isTextInput: function(ele) {
     return !!ele &&
            (ele.tagName == 'TEXTAREA' ||
             ele.contentEditable === 'true' ||
-            (ele.tagName == 'INPUT' && !(/radio|checkbox|range|file|submit|reset/i).test(ele.type)) );
+            (ele.tagName == 'INPUT' && !(/^(radio|checkbox|range|file|submit|reset)$/i).test(ele.type)) );
   },
 
   isLabelWithTextInput: function(ele) {
@@ -2632,7 +2630,7 @@ ionic.tap = {
   },
 
   requiresNativeClick: function(ele) {
-    if(!ele || ele.disabled || (/file|range/i).test(ele.type) || (/object|video/i).test(ele.tagName) ) {
+    if(!ele || ele.disabled || (/^(file|range)$/i).test(ele.type) || (/^(object|video)$/i).test(ele.tagName) ) {
       return true;
     }
     if(ele.nodeType === 1) {
@@ -2647,8 +2645,9 @@ ionic.tap = {
     return false;
   },
 
-  setTolerance: function(val) {
-    TAP_RELEASE_TOLERANCE = val;
+  setTolerance: function(releaseTolerance, releaseButtonTolerance) {
+    TAP_RELEASE_TOLERANCE = releaseTolerance;
+    TAP_RELEASE_BUTTON_TOLERANCE = releaseButtonTolerance;
   }
 
 };
@@ -2713,7 +2712,7 @@ function tapMouseDown(e) {
     void 0;
     e.stopPropagation();
 
-    if( !ionic.tap.isTextInput(e.target) || tapLastTouchTarget !== e.target ) {
+    if( (!ionic.tap.isTextInput(e.target) || tapLastTouchTarget !== e.target) && !(/^(select|option)$/i).test(e.target.tagName) ) {
       // If you preventDefault on a text input then you cannot move its text caret/cursor.
       // Allow through only the text input default. However, without preventDefault on an
       // input the 300ms delay can change focus on inputs after the keyboard shows up.
@@ -2738,7 +2737,7 @@ function tapMouseUp(e) {
     return false;
   }
 
-  if( tapIgnoreEvent(e) || (/select|option/i).test(e.target.tagName) ) return;
+  if( tapIgnoreEvent(e) || (/^(select|option)$/i).test(e.target.tagName) ) return false;
 
   if( !tapHasPointerMoved(e) ) {
     tapClick(e);
@@ -2791,7 +2790,7 @@ function tapTouchEnd(e) {
   if( !tapHasPointerMoved(e) ) {
     tapClick(e);
 
-    if( (/select|option/i).test(e.target.tagName) ) {
+    if( (/^(select|option)$/i).test(e.target.tagName) ) {
       e.preventDefault();
     }
   }
@@ -2848,7 +2847,7 @@ function tapHandleFocus(ele) {
     // already is the active element and has focus
     triggerFocusIn = true;
 
-  } else if( (/input|textarea/i).test(ele.tagName) ) {
+  } else if( (/^(input|textarea)$/i).test(ele.tagName) ) {
     triggerFocusIn = true;
     ele.focus && ele.focus();
     ele.value = ele.value;
@@ -2870,7 +2869,7 @@ function tapHandleFocus(ele) {
 
 function tapFocusOutActive() {
   var ele = tapActiveElement();
-  if(ele && (/input|textarea|select/i).test(ele.tagName) ) {
+  if(ele && (/^(input|textarea|select)$/i).test(ele.tagName) ) {
     void 0;
     ele.blur();
   }
@@ -2915,8 +2914,10 @@ function tapHasPointerMoved(endEvent) {
   }
   var endCoordinates = getPointerCoordinates(endEvent);
 
-  return Math.abs(tapPointerStart.x - endCoordinates.x) > TAP_RELEASE_TOLERANCE ||
-         Math.abs(tapPointerStart.y - endCoordinates.y) > TAP_RELEASE_TOLERANCE;
+  var releaseTolerance = (endEvent.target.classList.contains('button') ? TAP_RELEASE_BUTTON_TOLERANCE : TAP_RELEASE_TOLERANCE);
+
+  return Math.abs(tapPointerStart.x - endCoordinates.x) > releaseTolerance ||
+         Math.abs(tapPointerStart.y - endCoordinates.y) > releaseTolerance;
 }
 
 function getPointerCoordinates(event) {
@@ -3316,6 +3317,10 @@ ionic.keyboard = {
 
 function keyboardInit() {
   if( keyboardHasPlugin() ) {
+    window.addEventListener('native.keyboardshow', keyboardNativeShow);
+    window.addEventListener('native.keyboardhide', keyboardFocusOut);
+
+    //deprecated
     window.addEventListener('native.showkeyboard', keyboardNativeShow);
     window.addEventListener('native.hidekeyboard', keyboardFocusOut);
   }
@@ -4376,7 +4381,7 @@ ionic.views.Scroll = ionic.views.View.inherit({
 
           scrollBottomOffsetToTop = container.getBoundingClientRect().bottom;
           //distance from top of focused element to the bottom of the scroll view
-          var elementTopOffsetToScrollBottom = e.detail.elementTop - scrollBottomOffsetToTop; 
+          var elementTopOffsetToScrollBottom = e.detail.elementTop - scrollBottomOffsetToTop;
 
           var scrollTop = elementTopOffsetToScrollBottom  + scrollMidpointOffset;
           ionic.tap.cloneFocusedInput(container, self);
@@ -4515,7 +4520,7 @@ ionic.views.Scroll = ionic.views.View.inherit({
       // Mouse Events
       var mousedown = false;
 
-      container.addEventListener("mousedown", function(e) {
+      self.mouseDown = function(e) {
         if ( ionic.tap.ignoreScrollStart(e) || e.target.tagName === 'SELECT' ) {
           return;
         }
@@ -4523,9 +4528,9 @@ ionic.views.Scroll = ionic.views.View.inherit({
 
         e.preventDefault();
         mousedown = true;
-      }, false);
+      };
 
-      document.addEventListener("mousemove", function(e) {
+      self.mouseMove = function(e) {
         if (!mousedown || e.defaultPrevented) {
           return;
         }
@@ -4533,9 +4538,9 @@ ionic.views.Scroll = ionic.views.View.inherit({
         self.doTouchMove(getEventTouches(e), e.timeStamp);
 
         mousedown = true;
-      }, false);
+      };
 
-      document.addEventListener("mouseup", function(e) {
+      self.mouseUp = function(e) {
         if (!mousedown) {
           return;
         }
@@ -4543,25 +4548,55 @@ ionic.views.Scroll = ionic.views.View.inherit({
         self.doTouchEnd(e.timeStamp);
 
         mousedown = false;
-      }, false);
+      };
 
-      var wheelShowBarFn = ionic.debounce(function() {
-        self.__fadeScrollbars('in');
-      }, 500, true);
+      self.mouseWheel = ionic.animationFrameThrottle(function(e) {
+        var scrollParent = ionic.DomUtil.getParentOrSelfWithClass(e.target, 'ionic-scroll');
+        if (scrollParent === self.__container) {
 
-      var wheelHideBarFn = ionic.debounce(function() {
-        self.__fadeScrollbars('out');
-      }, 100, false);
+          self.hintResize();
+          self.scrollBy(
+            e.wheelDeltaX/self.options.wheelDampen, 
+            -e.wheelDeltaY/self.options.wheelDampen
+          );
 
-      //For Firefox
-      document.addEventListener('mousewheel', onMouseWheel);
+          self.__fadeScrollbars('in');
+          clearTimeout(self.__wheelHideBarTimeout);
+          self.__wheelHideBarTimeout = setTimeout(function() {
+            self.__fadeScrollbars('out');
+          }, 100);
+        }
+      });
+
+      container.addEventListener("mousedown", self.mouseDown, false);
+      document.addEventListener("mousemove", self.mouseMove, false);
+      document.addEventListener("mouseup", self.mouseUp, false);
+      document.addEventListener('mousewheel', self.mouseWheel, false);
     }
-    function onMouseWheel(e) {
-      self.hintResize();
-      wheelShowBarFn();
-      self.scrollBy(e.wheelDeltaX/self.options.wheelDampen, -e.wheelDeltaY/self.options.wheelDampen);
-      wheelHideBarFn();
-    }
+  },
+
+  __removeEventHandlers: function() {
+    var container = this.__container;
+
+    container.removeEventListener('touchstart', self.touchStart);
+    document.removeEventListener('touchmove', self.touchMove);
+    document.removeEventListener('touchend', self.touchEnd);
+    document.removeEventListener('touchcancel', self.touchCancel);
+
+    container.removeEventListener("pointerdown", self.touchStart);
+    document.removeEventListener("pointermove", self.touchMove);
+    document.removeEventListener("pointerup", self.touchEnd);
+    document.removeEventListener("pointercancel", self.touchEnd);
+
+    container.removeEventListener("MSPointerDown", self.touchStart);
+    document.removeEventListener("MSPointerMove", self.touchMove);
+    document.removeEventListener("MSPointerUp", self.touchEnd);
+    document.removeEventListener("MSPointerCancel", self.touchEnd);
+
+    container.removeEventListener("mousedown", self.mouseDown);
+    document.removeEventListener("mousemove", self.mouseMove);
+    document.removeEventListener("mouseup", self.mouseUp);
+    document.removeEventListener('mousewheel', self.mouseWheel);
   },
 
   /** Create a scroll bar div with the given direction **/
@@ -5210,7 +5245,6 @@ ionic.views.Scroll = ionic.views.View.inherit({
     return self.zoomTo(self.__zoomLevel * change, false, pageX - self.__clientLeft, pageY - self.__clientTop);
 
   },
-
 
   /**
    * Touch start handler for scrolling support
@@ -7107,9 +7141,8 @@ ionic.views.Slider = ionic.views.View.inherit({
               Math.abs(delta.x) > width/2;      // or if slide amt is greater than half the width
 
         // determine if slide attempt is past start and end
-        var isPastBounds =
-              !index && delta.x > 0 |                    // if first slide and slide amt is greater than 0
-              index == slides.length - 1 && delta.x < 0; // or if last slide and slide amt is less than 0
+        var isPastBounds = (!index && delta.x > 0) ||      // if first slide and slide amt is greater than 0
+              (index == slides.length - 1 && delta.x < 0); // or if last slide and slide amt is less than 0
 
         if (options.continuous) isPastBounds = false;
 
@@ -7964,21 +7997,21 @@ ionic.views.Slider = ionic.views.View.inherit({
   ionic.Animation = ionic.Animation || {};
 
 
-  /**
+  /*
    * JavaScript port of Webkit implementation of CSS cubic-bezier(p1x.p1y,p2x,p2y) by http://mck.me
    * http://svn.webkit.org/repository/webkit/trunk/Source/WebCore/platform/graphics/UnitBezier.h
    */
   ionic.Animation.Bezier = (function(){
     'use strict';
 
-    /**
+    /*
      * Duration value to use when one is not specified (400ms is a common value).
      * @const
      * @type {number}
      */
     var DEFAULT_DURATION = 400;//ms
 
-    /**
+    /*
      * The epsilon value we pass to UnitBezier::solve given that the animation is going to run over |dur| seconds.
      * The longer the animation, the more precision we need in the timing function result to avoid ugly discontinuities.
      * http://svn.webkit.org/repository/webkit/trunk/Source/WebCore/page/animation/AnimationBase.cpp
@@ -7987,7 +8020,7 @@ ionic.views.Slider = ionic.views.View.inherit({
       return 1.0 / (200.0 * duration);
     };
 
-    /**
+    /*
      * Defines a cubic-bezier curve given the middle two control points.
      * NOTE: first and last control points are implicitly (0,0) and (1,1).
      * @param p1x {number} X component of control point 1
@@ -8001,49 +8034,49 @@ ionic.views.Slider = ionic.views.View.inherit({
 
       // Calculate the polynomial coefficients, implicit first and last control points are (0,0) and (1,1).
 
-      /**
+      /*
        * X component of Bezier coefficient C
        * @const
        * @type {number}
        */
       var cx = 3.0 * p1x;
 
-      /**
+      /*
        * X component of Bezier coefficient B
        * @const
        * @type {number}
        */
       var bx = 3.0 * (p2x - p1x) - cx;
 
-      /**
+      /*
        * X component of Bezier coefficient A
        * @const
        * @type {number}
        */
       var ax = 1.0 - cx -bx;
 
-      /**
+      /*
        * Y component of Bezier coefficient C
        * @const
        * @type {number}
        */
       var cy = 3.0 * p1y;
 
-      /**
+      /*
        * Y component of Bezier coefficient B
        * @const
        * @type {number}
        */
       var by = 3.0 * (p2y - p1y) - cy;
 
-      /**
+      /*
        * Y component of Bezier coefficient A
        * @const
        * @type {number}
        */
       var ay = 1.0 - cy - by;
 
-      /**
+      /*
        * @param t {number} parametric timing value
        * @return {number}
        */
@@ -8052,7 +8085,7 @@ ionic.views.Slider = ionic.views.View.inherit({
         return ((ax * t + bx) * t + cx) * t;
       };
 
-      /**
+      /*
        * @param t {number} parametric timing value
        * @return {number}
        */
@@ -8060,7 +8093,7 @@ ionic.views.Slider = ionic.views.View.inherit({
         return ((ay * t + by) * t + cy) * t;
       };
 
-      /**
+      /*
        * @param t {number} parametric timing value
        * @return {number}
        */
@@ -8068,7 +8101,7 @@ ionic.views.Slider = ionic.views.View.inherit({
         return (3.0 * ax * t + 2.0 * bx) * t + cx;
       };
 
-      /**
+      /*
        * Given an x value, find a parametric value it came from.
        * @param x {number} value of x along the bezier curve, 0.0 <= x <= 1.0
        * @param epsilon {number} accuracy limit of t for the given x
@@ -8124,7 +8157,7 @@ ionic.views.Slider = ionic.views.View.inherit({
         return t2;
       };
 
-      /**
+      /*
        * @param x {number} the value of x along the bezier curve, 0.0 <= x <= 1.0
        * @param epsilon {number} the accuracy of t for the given x
        * @return {number} the y value along the bezier curve
@@ -8135,7 +8168,7 @@ ionic.views.Slider = ionic.views.View.inherit({
 
       // public interface --------------------------------------------
 
-      /**
+      /*
        * Find the y of the cubic-bezier for a given x with accuracy determined by the animation duration.
        * @param x {number} the value of x along the bezier curve, 0.0 <= x <= 1.0
        * @param duration {number} the duration of the animation in milliseconds
@@ -8148,42 +8181,42 @@ ionic.views.Slider = ionic.views.View.inherit({
 
     // http://www.w3.org/TR/css3-transitions/#transition-timing-function
     return {
-      /**
+      /*
        * @param x {number} the value of x along the bezier curve, 0.0 <= x <= 1.0
        * @param duration {number} the duration of the animation in milliseconds
        * @return {number} the y value along the bezier curve
        */
       linear: unitBezier(0.0, 0.0, 1.0, 1.0),
 
-      /**
+      /*
        * @param x {number} the value of x along the bezier curve, 0.0 <= x <= 1.0
        * @param duration {number} the duration of the animation in milliseconds
        * @return {number} the y value along the bezier curve
        */
       ease: unitBezier(0.25, 0.1, 0.25, 1.0),
 
-      /**
+      /*
        * @param x {number} the value of x along the bezier curve, 0.0 <= x <= 1.0
        * @param duration {number} the duration of the animation in milliseconds
        * @return {number} the y value along the bezier curve
        */
       easeIn: unitBezier(0.42, 0, 1.0, 1.0),
 
-      /**
+      /*
        * @param x {number} the value of x along the bezier curve, 0.0 <= x <= 1.0
        * @param duration {number} the duration of the animation in milliseconds
        * @return {number} the y value along the bezier curve
        */
       easeOut: unitBezier(0, 0, 0.58, 1.0),
 
-      /**
+      /*
        * @param x {number} the value of x along the bezier curve, 0.0 <= x <= 1.0
        * @param duration {number} the duration of the animation in milliseconds
        * @return {number} the y value along the bezier curve
        */
       easeInOut: unitBezier(0.42, 0, 0.58, 1.0),
 
-      /**
+      /*
        * @param p1x {number} X component of control point 1
        * @param p1y {number} Y component of control point 1
        * @param p2x {number} X component of control point 2
@@ -8198,21 +8231,21 @@ ionic.views.Slider = ionic.views.View.inherit({
     };
   })();
 
-/**
+/*
  * Various fast approximations and alternates to cubic-bezier easing functions.
  * http://www.w3.org/TR/css3-transitions/#transition-timing-function
  */
 var Easing = (function(){
 	'use strict';
 
-	/**
+	/*
 	 * @const
 	 */
 	var EASE_IN_OUT_CONST = 0.5 * Math.pow(0.5, 1.925);
 
 	return {
 
-		/**
+		/*
 		 * @param x {number} the value of x along the curve, 0.0 <= x <= 1.0
 		 * @return {number} the y value along the curve
 		 */
@@ -8220,7 +8253,7 @@ var Easing = (function(){
 			return x;
 		},
 
-//		/**
+//		/*
 //		 * @param x {number} the value of x along the curve, 0.0 <= x <= 1.0
 //		 * @return {number} the y value along the curve
 //		 */
@@ -8229,7 +8262,7 @@ var Easing = (function(){
 //			return x;
 //		},
 
-		/**
+		/*
 		 * @param x {number} the value of x along the curve, 0.0 <= x <= 1.0
 		 * @return {number} the y value along the curve
 		 */
@@ -8238,7 +8271,7 @@ var Easing = (function(){
 			return Math.pow(x, 1.685);
 		},
 
-		/**
+		/*
 		 * @param x {number} the value of x along the curve, 0.0 <= x <= 1.0
 		 * @return {number} the y value along the curve
 		 */
@@ -8246,7 +8279,7 @@ var Easing = (function(){
 			return (x * x);
 		},
 
-		/**
+		/*
 		 * @param x {number} the value of x along the curve, 0.0 <= x <= 1.0
 		 * @return {number} the y value along the curve
 		 */
@@ -8254,7 +8287,7 @@ var Easing = (function(){
 			return (x * x * x);
 		},
 
-		/**
+		/*
 		 * @param x {number} the value of x along the curve, 0.0 <= x <= 1.0
 		 * @return {number} the y value along the curve
 		 */
@@ -8263,7 +8296,7 @@ var Easing = (function(){
 			return 1 - Math.pow(1-x, 1.685);
 		},
 
-		/**
+		/*
 		 * @param x {number} the value of x along the curve, 0.0 <= x <= 1.0
 		 * @return {number} the y value along the curve
 		 */
@@ -8272,7 +8305,7 @@ var Easing = (function(){
 			return 1 - (x * x);
 		},
 
-		/**
+		/*
 		 * @param x {number} the value of x along the curve, 0.0 <= x <= 1.0
 		 * @return {number} the y value along the curve
 		 */
@@ -8281,7 +8314,7 @@ var Easing = (function(){
 			return 1 + (x * x * x);
 		},
 
-		/**
+		/*
 		 * @param x {number} the value of x along the curve, 0.0 <= x <= 1.0
 		 * @return {number} the y value along the curve
 		 */
@@ -8295,7 +8328,7 @@ var Easing = (function(){
 			}
 		},
 
-		/**
+		/*
 		 * @param x {number} the value of x along the curve, 0.0 <= x <= 1.0
 		 * @return {number} the y value along the curve
 		 */
@@ -8309,7 +8342,7 @@ var Easing = (function(){
 			}
 		},
 
-		/**
+		/*
 		 * @param x {number} the value of x along the curve, 0.0 <= x <= 1.0
 		 * @return {number} the y value along the curve
 		 */
@@ -8323,7 +8356,7 @@ var Easing = (function(){
 			}
 		},
 
-		/**
+		/*
 		 * @param x {number} the value of x along the curve, 0.0 <= x <= 1.0
 		 * @return {number} the y value along the curve
 		 */
@@ -8337,7 +8370,7 @@ var Easing = (function(){
 			}
 		},
 
-		/**
+		/*
 		 * @param x {number} the value of x along the curve, 0.0 <= x <= 1.0
 		 * @return {number} the y value along the curve
 		 */

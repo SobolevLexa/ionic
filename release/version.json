@@ -1,13 +1,6 @@
 {
-<<<<<<< HEAD
-  "version": "1.0.0-beta.4",
-  "codename": "antimony-antelope",
-  "date": "2014-05-07",
-  "time": "22:08:26"
-=======
   "version": "1.0.0-beta.5b",
-  "codename": "barium-bobcat",
-  "date": "2014-05-14",
-  "time": "22:55:10"
->>>>>>> upstream/master
+  "codename": "cadmium-camel",
+  "date": "2014-05-20",
+  "time": "15:33:15"
 }

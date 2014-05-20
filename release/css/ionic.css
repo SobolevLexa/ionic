@@ -1959,13 +1959,8 @@ table {
 
 html {
   overflow: hidden;
-<<<<<<< HEAD
-  -ms-touch-action: manipulation;
-  touch-action: manipulation; }
-=======
   -ms-touch-action: none;
   touch-action: none; }
->>>>>>> upstream/master
 
 body, .ionic-body {
   -webkit-touch-callout: none;
@@ -2219,6 +2214,9 @@ ion-infinite-scroll.active .scroll-infinite {
 
 .has-footer {
   bottom: 44px; }
+
+.has-subfooter {
+  bottom: 88px; }
 
 .has-tabs, .bar-footer.has-tabs {
   bottom: 49px; }
