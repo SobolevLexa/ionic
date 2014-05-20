@@ -35,6 +35,7 @@ function run {
   echo "TRAVIS_COMMIT=$TRAVIS_COMMIT"
 
   # check for stupid mistakes
+  gulp jshint
   gulp ddescribe-iit
 
   # Run simple quick tests on Phantom to be sure any tests pass
@@ -96,7 +97,9 @@ function run {
     ./scripts/seed/publish.sh --version="$VERSION"
     ./scripts/app-base/publish.sh --version="$VERSION"
 
-    gulp release-tweet release-irc
+    ./scripts/travis/release-new-version.sh \
+      --action="tweetAndIrc"
+      --version=$VERSION
   else
     ./scripts/site/publish.sh --action="clone"
 

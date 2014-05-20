@@ -69,7 +69,7 @@ describe('tabs', function() {
       ctrl.remove(tab1);
       expect(ctrl.selectedTab()).toBe(tab2);
       expect(ctrl.tabs.indexOf(tab1)).toBe(-1);
-      ctrl.remove(tab2)
+      ctrl.remove(tab2);
       expect(ctrl.selectedTab()).toBe(null);
       expect(ctrl.tabs.indexOf(tab2)).toBe(-1);
       expect(ctrl.tabs.length).toBe(0);
@@ -400,8 +400,6 @@ describe('tabs', function() {
       });
       tabEl.scope().$apply();
       var navItem = angular.element(tabsEl[0].querySelector('.tab-item'));
-      //Use .scope for title because we remove title attr
-      //(for dom-tooltip not to appear)
       expect(navItem.isolateScope().title).toEqual('title');
       expect(navItem.isolateScope().iconOn).toEqual('on');
       expect(navItem.isolateScope().iconOff).toEqual('off');

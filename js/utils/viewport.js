@@ -25,7 +25,7 @@ function viewportLoadTag() {
     var props = viewportTag.content.toLowerCase().replace(/\s+/g, '').split(',');
     var keyValue;
     for(x=0; x<props.length; x++) {
-      if(props[x] != '') {
+      if(props[x]) {
         keyValue = props[x].split('=');
         viewportProperties[ keyValue[0] ] = (keyValue.length > 1 ? keyValue[1] : '_');
       }
@@ -94,6 +94,10 @@ function viewportUpdate() {
         // iPhone <= 6.1 WebView
         // if height was set it needs to get removed with this hack for <= 6.1
         if( initHeight ) viewportProperties.height = '0';
+
+      } else if(version == 7) {
+        //iPhone == 7.0 WebView
+        viewportProperties.height = DEVICE_HEIGHT;
       }
 
     } else {

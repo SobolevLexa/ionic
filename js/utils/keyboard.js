@@ -1,3 +1,52 @@
+/**
+ * @ngdoc page
+ * @name keyboard
+ * @module ionic
+ * @description
+ * On both Android and iOS, Ionic will attempt to prevent the keyboard from obscuring inputs and 
+ * focusable elements when it appears by scrolling them into view.  In order for this to work,
+ * any focusable elements must be within a [Scroll View](http://ionicframework.com/docs/api/directive/ionScroll/)
+ * or a directive such as [Content](http://ionicframework.com/docs/api/directive/ionContent/) that has a Scroll View.
+ *
+ * It will also attempt to prevent the native overflow scrolling on focus, which can cause layout issues such as 
+ * pushing headers up and out of view.
+ *
+ * The keyboard fixes work best in conjunction with the [Ionic Keyboard Plugin](https://github.com/driftyco/ionic-plugins-keyboard),
+ * although it will perform reasonably well without.  However, if you are using Cordova there is no reason not to use the plugin.
+ *
+ * ### Hide when keyboard shows
+ * 
+ * To hide an element when the keyboard is open, add the class `hide-on-keyboard-open`.
+ *
+ * ```html
+ * <div class="hide-on-keyboard-open">
+ *   <div id="google-map"></div>
+ * </div>
+ * ```
+ * ----------
+ *
+ * ### Plugin Usage
+ * Information on using the plugin can be found at [https://github.com/driftyco/ionic-plugins-keyboard](https://github.com/driftyco/ionic-plugins-keyboard).
+ *
+ * ---------- 
+ *
+ * ### Android Notes
+ * - If your app is running in fullscreen, i.e. you have `<preference name="Fullscreen" value="true" />` in your `config.xml` file
+ * you will need to set `ionic.Platform.isFullScreen = true` manually.
+ *
+ * - You can configure the behavior of the web view when the keyboard shows by setting 
+ *   [android:windowSoftInputMode](http://developer.android.com/reference/android/R.attr.html#windowSoftInputMode) to either `adjustPan`, `adjustResize` or `adjustNothing` in your app's activity in `AndroidManifest.xml`. `adjustResize` is the recommended setting for Ionic, but if for some reason you do use `adjustPan` you will need to set `ionic.Platform.isFullScreen = true`.
+ *
+ *   ```xml
+ *   <activity android:windowSoftInputMode="adjustResize">
+ *
+ *   ```
+ *
+ * ### iOS Notes
+ * - if you are not using the keyboard plugin, switching to inputs below the keyboard using the accessory bar will automatically use the native browser's
+ * overflow scrolling and push headers out of view
+ * 
+ */
 
 /*
 IONIC KEYBOARD
@@ -23,6 +72,10 @@ ionic.keyboard = {
 
 function keyboardInit() {
   if( keyboardHasPlugin() ) {
+    window.addEventListener('native.keyboardshow', keyboardNativeShow);
+    window.addEventListener('native.keyboardhide', keyboardFocusOut);
+
+    //deprecated
     window.addEventListener('native.showkeyboard', keyboardNativeShow);
     window.addEventListener('native.hidekeyboard', keyboardFocusOut);
   }
@@ -90,7 +143,8 @@ function keyboardShow(element, elementTop, elementBottom, viewportHeight, keyboa
     target: element,
     elementTop: Math.round(elementTop),
     elementBottom: Math.round(elementBottom),
-    keyboardHeight: keyboardHeight
+    keyboardHeight: keyboardHeight,
+    viewportHeight: viewportHeight
   };
 
   details.hasPlugin = keyboardHasPlugin();
@@ -98,11 +152,6 @@ function keyboardShow(element, elementTop, elementBottom, viewportHeight, keyboa
   details.contentHeight = viewportHeight - keyboardHeight;
 
   console.log('keyboardShow', keyboardHeight, details.contentHeight);
-
-  // distance from top of input to the top of the keyboard
-  details.keyboardTopOffset = details.elementTop - details.contentHeight;
-
-  console.log('keyboardTopOffset', details.elementTop, details.contentHeight, details.keyboardTopOffset);
 
   // figure out if the element is under the keyboard
   details.isElementUnderKeyboard = (details.elementBottom > details.contentHeight);
@@ -126,7 +175,6 @@ function keyboardShow(element, elementTop, elementBottom, viewportHeight, keyboa
 }
 
 function keyboardFocusOut(e) {
-  clearTimeout(keyboardFocusInTimer);
   clearTimeout(keyboardFocusOutTimer);
 
   keyboardFocusOutTimer = setTimeout(keyboardHide, 350);
@@ -162,7 +210,9 @@ function keyboardOnKeyDown(e) {
 }
 
 function keyboardPreventDefault(e) {
-  e.preventDefault();
+  if( e.target.tagName !== 'TEXTAREA' ) {
+    e.preventDefault();
+  }
 }
 
 function keyboardOrientationChange() {

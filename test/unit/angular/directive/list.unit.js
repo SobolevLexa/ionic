@@ -110,6 +110,8 @@ describe('ionList directive', function() {
 
     el.scope().$onReorder = jasmine.createSpy('$onReorder');
     options.onReorder(el, 2, 3);
+    expect(el.scope().$onReorder).not.toHaveBeenCalled();
+    el.scope().$apply();
     expect(el.scope().$onReorder).toHaveBeenCalledWith(2,3);
   });
 
@@ -244,6 +246,12 @@ describe('ionItem directive', function() {
     expect(el.html()).toBe('1 <b>2</b>');
     expect(el.hasClass('item')).toBe(true);
     expect(el.hasClass('item-complex')).toBe(false);
+  });
+  it('should be complex if ui-sref', function() {
+    var el = setup('ui-sref="something"');
+    expect(el.hasClass('item item-complex')).toBe(true);
+    expect(el.children()[0].tagName).toBe('A');
+    expect(el.children().hasClass('item-content')).toBe(true);
   });
   ['href', 'ng-href'].forEach(function(attr) {
     it('should be complex anchor if '+attr+' is defined', function() {

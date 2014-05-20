@@ -12,6 +12,8 @@
  * License: MIT + Apache (V2)
  */
 
+/* jshint eqnull: true */
+
 /**
  * Generic animation class with support for dropped frames both optional easing and duration.
  *
@@ -52,7 +54,7 @@ var zyngaCore = { effect: {} };
 
       if (isNative) {
         return function(callback, root) {
-          requestFrame(callback, root)
+          requestFrame(callback, root);
         };
       }
 
@@ -620,11 +622,20 @@ ionic.views.Scroll = ionic.views.View.inherit({
     //Broadcasted when keyboard is shown on some platforms.
     //See js/utils/keyboard.js
     container.addEventListener('scrollChildIntoView', function(e) {
+
+      //distance from bottom of scrollview to top of viewport
+      var scrollBottomOffsetToTop;
+
       if( !self.isScrolledIntoView ) {
         // shrink scrollview so we can actually scroll if the input is hidden
         // if it isn't shrink so we can scroll to inputs under the keyboard
         if (ionic.Platform.isIOS() || ionic.Platform.isFullScreen){
-          container.style.height = (container.clientHeight - e.detail.keyboardHeight) + "px";
+          // if there are things below the scroll view account for them and
+          // subtract them from the keyboard height when resizing
+          scrollBottomOffsetToTop = container.getBoundingClientRect().bottom;
+          var scrollBottomOffsetToBottom = e.detail.viewportHeight - scrollBottomOffsetToTop;
+          var keyboardOffset = Math.max(0, e.detail.keyboardHeight - scrollBottomOffsetToBottom);
+          container.style.height = (container.clientHeight - keyboardOffset) + "px";
           container.style.overflow = "visible";
           //update scroll view
           self.resize();
@@ -635,22 +646,31 @@ ionic.views.Scroll = ionic.views.View.inherit({
       //If the element is positioned under the keyboard...
       if( e.detail.isElementUnderKeyboard ) {
         var delay;
-        // Wait on android for scroll view to resize
-        if ( !ionic.Platform.isFullScreen && e.detail.hasPlugin ) {
-          delay = 350;
-        }
-        else {
+        // Wait on android for web view to resize
+        if ( ionic.Platform.isAndroid() && !ionic.Platform.isFullScreen ) {
+          // android y u resize so slow
+          if ( ionic.Platform.version() < 4.4) {
+            delay = 500;
+          } else {
+            // probably overkill for chrome
+            delay = 350;
+          }
+        } else {
           delay = 80;
         }
 
         //Put element in middle of visible screen
-        //Wait for resize() to reset scroll position
+        //Wait for android to update view height and resize() to reset scroll position
         ionic.scroll.isScrolling = true;
         setTimeout(function(){
           //middle of the scrollview, where we want to scroll to
-          var scrollViewMidpointOffset = container.clientHeight * 0.5;
-          var scrollTop = e.detail.keyboardTopOffset + scrollViewMidpointOffset;
-          console.log('scrollChildIntoView', scrollTop);
+          var scrollMidpointOffset = container.clientHeight * 0.5;
+
+          scrollBottomOffsetToTop = container.getBoundingClientRect().bottom;
+          //distance from top of focused element to the bottom of the scroll view
+          var elementTopOffsetToScrollBottom = e.detail.elementTop - scrollBottomOffsetToTop;
+
+          var scrollTop = elementTopOffsetToScrollBottom  + scrollMidpointOffset;
           ionic.tap.cloneFocusedInput(container, self);
           self.scrollBy(0, scrollTop, true);
           self.onScroll();
@@ -671,6 +691,12 @@ ionic.views.Scroll = ionic.views.View.inherit({
       ionic.scroll.isScrolling = false;
     });
 
+    function getEventTouches(e) {
+      return e.touches && e.touches.length ? e.touches : [{
+        pageX: e.pageX,
+        pageY: e.pageY
+      }];
+    }
 
     self.touchStart = function(e) {
       self.startCoordinates = getPointerCoordinates(e);
@@ -679,7 +705,9 @@ ionic.views.Scroll = ionic.views.View.inherit({
         return;
       }
 
-      if( ionic.tap.containsOrIsTextInput(e.target) ) {
+      self.__isDown = true;
+
+      if( ionic.tap.containsOrIsTextInput(e.target) || e.target.tagName === 'SELECT' ) {
         // do not start if the target is a text input
         // if there is a touchmove on this input, then we can start the scroll
         self.__hasStarted = false;
@@ -689,20 +717,22 @@ ionic.views.Scroll = ionic.views.View.inherit({
       self.__isSelectable = true;
       self.__enableScrollY = true;
       self.__hasStarted = true;
-      self.doTouchStart(e.touches, e.timeStamp);
+      self.doTouchStart(getEventTouches(e), e.timeStamp);
       e.preventDefault();
     };
 
     self.touchMove = function(e) {
-      if(e.defaultPrevented) {
+      if(!self.__isDown ||
+        e.defaultPrevented ||
+        (e.target.tagName === 'TEXTAREA' && e.target.parentElement.querySelector(':focus')) ) {
         return;
       }
 
-      if( !self.__hasStarted && ionic.tap.containsOrIsTextInput(e.target) ) {
+      if( !self.__hasStarted && ( ionic.tap.containsOrIsTextInput(e.target) || e.target.tagName === 'SELECT' ) ) {
         // the target is a text input and scroll has started
         // since the text input doesn't start on touchStart, do it here
         self.__hasStarted = true;
-        self.doTouchStart(e.touches, e.timeStamp);
+        self.doTouchStart(getEventTouches(e), e.timeStamp);
         e.preventDefault();
         return;
       }
@@ -728,11 +758,15 @@ ionic.views.Scroll = ionic.views.View.inherit({
         }
       }
 
-      self.doTouchMove(e.touches, e.timeStamp, e.scale);
+      self.doTouchMove(getEventTouches(e), e.timeStamp, e.scale);
+      self.__isDown = true;
     };
 
     self.touchEnd = function(e) {
+      if(!self.__isDown) return;
+
       self.doTouchEnd(e.timeStamp);
+      self.__isDown = false;
       self.__hasStarted = false;
       self.__isSelectable = true;
       self.__enableScrollY = true;
@@ -748,44 +782,52 @@ ionic.views.Scroll = ionic.views.View.inherit({
       self.options.orgScrollingComplete();
     };
 
-
     if ('ontouchstart' in window) {
+      // Touch Events
       container.addEventListener("touchstart", self.touchStart, false);
       document.addEventListener("touchmove", self.touchMove, false);
       document.addEventListener("touchend", self.touchEnd, false);
       document.addEventListener("touchcancel", self.touchEnd, false);
 
-    } else {
+    } else if (window.navigator.pointerEnabled) {
+      // Pointer Events
+      container.addEventListener("pointerdown", self.touchStart, false);
+      document.addEventListener("pointermove", self.touchMove, false);
+      document.addEventListener("pointerup", self.touchEnd, false);
+      document.addEventListener("pointercancel", self.touchEnd, false);
 
+    } else if (window.navigator.msPointerEnabled) {
+      // IE10, WP8 (Pointer Events)
+      container.addEventListener("MSPointerDown", self.touchStart, false);
+      document.addEventListener("MSPointerMove", self.touchMove, false);
+      document.addEventListener("MSPointerUp", self.touchEnd, false);
+      document.addEventListener("MSPointerCancel", self.touchEnd, false);
+
+    } else {
+      // Mouse Events
       var mousedown = false;
 
-      container.addEventListener("mousedown", function(e) {
+      self.mouseDown = function(e) {
         if ( ionic.tap.ignoreScrollStart(e) || e.target.tagName === 'SELECT' ) {
           return;
         }
-        self.doTouchStart([{
-          pageX: e.pageX,
-          pageY: e.pageY
-        }], e.timeStamp);
+        self.doTouchStart(getEventTouches(e), e.timeStamp);
 
         e.preventDefault();
         mousedown = true;
-      }, false);
+      };
 
-      document.addEventListener("mousemove", function(e) {
+      self.mouseMove = function(e) {
         if (!mousedown || e.defaultPrevented) {
           return;
         }
 
-        self.doTouchMove([{
-          pageX: e.pageX,
-          pageY: e.pageY
-        }], e.timeStamp);
+        self.doTouchMove(getEventTouches(e), e.timeStamp);
 
         mousedown = true;
-      }, false);
+      };
 
-      document.addEventListener("mouseup", function(e) {
+      self.mouseUp = function(e) {
         if (!mousedown) {
           return;
         }
@@ -793,25 +835,55 @@ ionic.views.Scroll = ionic.views.View.inherit({
         self.doTouchEnd(e.timeStamp);
 
         mousedown = false;
-      }, false);
+      };
 
-      var wheelShowBarFn = ionic.debounce(function() {
-        self.__fadeScrollbars('in');
-      }, 500, true);
+      self.mouseWheel = ionic.animationFrameThrottle(function(e) {
+        var scrollParent = ionic.DomUtil.getParentOrSelfWithClass(e.target, 'ionic-scroll');
+        if (scrollParent === self.__container) {
 
-      var wheelHideBarFn = ionic.debounce(function() {
-        self.__fadeScrollbars('out');
-      }, 100, false);
+          self.hintResize();
+          self.scrollBy(
+            e.wheelDeltaX/self.options.wheelDampen, 
+            -e.wheelDeltaY/self.options.wheelDampen
+          );
 
-      //For Firefox
-      document.addEventListener('mousewheel', onMouseWheel);
-      function onMouseWheel(e) {
-        self.hintResize();
-        wheelShowBarFn();
-        self.scrollBy(e.wheelDeltaX/self.options.wheelDampen, -e.wheelDeltaY/self.options.wheelDampen);
-        wheelHideBarFn();
-      }
+          self.__fadeScrollbars('in');
+          clearTimeout(self.__wheelHideBarTimeout);
+          self.__wheelHideBarTimeout = setTimeout(function() {
+            self.__fadeScrollbars('out');
+          }, 100);
+        }
+      });
+
+      container.addEventListener("mousedown", self.mouseDown, false);
+      document.addEventListener("mousemove", self.mouseMove, false);
+      document.addEventListener("mouseup", self.mouseUp, false);
+      document.addEventListener('mousewheel', self.mouseWheel, false);
     }
+  },
+
+  __removeEventHandlers: function() {
+    var container = this.__container;
+
+    container.removeEventListener('touchstart', self.touchStart);
+    document.removeEventListener('touchmove', self.touchMove);
+    document.removeEventListener('touchend', self.touchEnd);
+    document.removeEventListener('touchcancel', self.touchCancel);
+
+    container.removeEventListener("pointerdown", self.touchStart);
+    document.removeEventListener("pointermove", self.touchMove);
+    document.removeEventListener("pointerup", self.touchEnd);
+    document.removeEventListener("pointercancel", self.touchEnd);
+
+    container.removeEventListener("MSPointerDown", self.touchStart);
+    document.removeEventListener("MSPointerMove", self.touchMove);
+    document.removeEventListener("MSPointerUp", self.touchEnd);
+    document.removeEventListener("MSPointerCancel", self.touchEnd);
+
+    container.removeEventListener("mousedown", self.mouseDown);
+    document.removeEventListener("mousemove", self.mouseMove);
+    document.removeEventListener("mouseup", self.mouseUp);
+    document.removeEventListener('mousewheel', self.mouseWheel);
   },
 
   /** Create a scroll bar div with the given direction **/
@@ -1461,23 +1533,17 @@ ionic.views.Scroll = ionic.views.View.inherit({
 
   },
 
-
   /**
    * Touch start handler for scrolling support
    */
   doTouchStart: function(touches, timeStamp) {
     this.hintResize();
 
-    // Array-like check is enough here
-    if (touches.length == null) {
-      throw new Error("Invalid touch list: " + touches);
-    }
-
     if (timeStamp instanceof Date) {
       timeStamp = timeStamp.valueOf();
     }
     if (typeof timeStamp !== "number") {
-      throw new Error("Invalid timestamp value: " + timeStamp);
+      timeStamp = Date.now();
     }
 
     var self = this;
@@ -1553,17 +1619,11 @@ ionic.views.Scroll = ionic.views.View.inherit({
    * Touch move handler for scrolling support
    */
   doTouchMove: function(touches, timeStamp, scale) {
-
-    // Array-like check is enough here
-    if (touches.length == null) {
-      throw new Error("Invalid touch list: " + touches);
-    }
-
     if (timeStamp instanceof Date) {
       timeStamp = timeStamp.valueOf();
     }
     if (typeof timeStamp !== "number") {
-      throw new Error("Invalid timestamp value: " + timeStamp);
+      timeStamp = Date.now();
     }
 
     var self = this;
@@ -1572,7 +1632,6 @@ ionic.views.Scroll = ionic.views.View.inherit({
     if (!self.__isTracking) {
       return;
     }
-
 
     var currentTouchLeft, currentTouchTop;
 
@@ -1742,12 +1801,11 @@ ionic.views.Scroll = ionic.views.View.inherit({
    * Touch end handler for scrolling support
    */
   doTouchEnd: function(timeStamp) {
-
     if (timeStamp instanceof Date) {
       timeStamp = timeStamp.valueOf();
     }
     if (typeof timeStamp !== "number") {
-      throw new Error("Invalid timestamp value: " + timeStamp);
+      timeStamp = Date.now();
     }
 
     var self = this;
@@ -1965,7 +2023,7 @@ ionic.views.Scroll = ionic.views.View.inherit({
     self.__maxScrollLeft = Math.max((self.__contentWidth * zoomLevel) - self.__clientWidth, 0);
     self.__maxScrollTop = Math.max((self.__contentHeight * zoomLevel) - self.__clientHeight, 0);
 
-    if(!self.__didWaitForSize && self.__maxScrollLeft == 0 && self.__maxScrollTop == 0) {
+    if(!self.__didWaitForSize && !self.__maxScrollLeft && !self.__maxScrollTop) {
       self.__didWaitForSize = true;
       self.__waitForSize();
     }
@@ -1984,7 +2042,7 @@ ionic.views.Scroll = ionic.views.View.inherit({
     var sizer = function() {
       self.resize();
 
-      if((self.options.scrollingX && self.__maxScrollLeft == 0) || (self.options.scrollingY && self.__maxScrollTop == 0)) {
+      if((self.options.scrollingX && !self.__maxScrollLeft) || (self.options.scrollingY && !self.__maxScrollTop)) {
         //self.__sizerTimeout = setTimeout(sizer, 1000);
       }
     };

@@ -26,6 +26,15 @@
             };
   })();
 
+  var vendors = ['webkit', 'moz'];
+  for(var x = 0; x < vendors.length && !window.requestAnimationFrame; ++x) {
+    window.requestAnimationFrame = window[vendors[x]+'RequestAnimationFrame'];
+    window.cancelAnimationFrame =
+      window[vendors[x]+'CancelAnimationFrame'] || window[vendors[x]+'CancelRequestAnimationFrame'];
+  }
+  window.cancelAnimationFrame =
+        window[vendors[x]+'CancelAnimationFrame'] || window[vendors[x]+'CancelRequestAnimationFrame'];
+
   /**
   * @ngdoc utility
   * @name ionic.DomUtil
@@ -43,6 +52,9 @@
      */
     requestAnimationFrame: function(cb) {
       window._rAF(cb);
+    },
+
+    cancelAnimationFrame: function(cb) {
     },
 
     /**
@@ -192,8 +204,11 @@
     centerElementByMarginTwice: function(el) {
       ionic.requestAnimationFrame(function() {
         ionic.DomUtil.centerElementByMargin(el);
-        ionic.requestAnimationFrame(function() {
+        setTimeout(function() {
           ionic.DomUtil.centerElementByMargin(el);
+          setTimeout(function() {
+            ionic.DomUtil.centerElementByMargin(el);
+          });
         });
       });
     },
@@ -256,5 +271,6 @@
 
   //Shortcuts
   ionic.requestAnimationFrame = ionic.DomUtil.requestAnimationFrame;
+  ionic.cancelAnimationFrame = ionic.DomUtil.cancelAnimationFrame;
   ionic.animationFrameThrottle = ionic.DomUtil.animationFrameThrottle;
 })(window, document, ionic);

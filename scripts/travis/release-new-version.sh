@@ -65,7 +65,7 @@ function github {
   sed -e '/'"$OLD_VERSION"'/,$d' $PROJECT_DIR/CHANGELOG.md | tail -n +3 \
     > $TMP_DIR/CHANGELOG_NEW.md
 
-  CODENAME=$(readJsonProp "$PROJECT_DIR/package.json" "codename")
+  CODENAME=$(readJsonProp "$IONIC_DIR/package.json" "codename")
 
   # we have to get all releases, then find the one corresponding to this new tag
   curl https://api.github.com/repos/$GH_ORG/ionic/releases > $TMP_DIR/releases.json
@@ -102,7 +102,7 @@ function github {
 }
 
 function discourse {
-  CODENAME=$(readJsonProp "$PROJECT_DIR/package.json" "codename")
+  CODENAME=$(readJsonProp "$IONIC_DIR/package.json" "codename")
   # Get only newest things in changelog - sed until previous version is hit
   sed -e '/'"$OLD_VERSION"'/,$d' $PROJECT_DIR/CHANGELOG.md | tail -n +3 \
     > $TMP_DIR/NEW_CHANGELOG.md
@@ -132,13 +132,18 @@ function discourse {
 
   curl -X PUT "$POST_URL/status" \
     --data "api_key=$DISCOURSE_TOKEN&api_username=Ionitron&status=pinned&enabled=true"
-  curl -X PUT "$POST_URL/status" \
-    --data "api_key=$DISCOURSE_TOKEN&api_username=Ionitron&status=closed&enabled=true"
+  # curl -X PUT "$POST_URL/status" \
+  #   --data "api_key=$DISCOURSE_TOKEN&api_username=Ionitron&status=closed&enabled=true"
 
   cd $IONIC_DIR
   git add config
   git commit config -m 'chore(release): update discourse post url'
   git push -q origin master
+}
+
+function tweetAndIrc {
+  cd $IONIC_DIR
+  gulp release-tweet release-irc
 }
 
 source $(dirname $0)/../utils.inc

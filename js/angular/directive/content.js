@@ -18,6 +18,9 @@
  * directive, and infinite scrolling with the {@link ionic.directive:ionInfiniteScroll}
  * directive.
  *
+ * Be aware that this directive gets its own child scope. If you do not understand why this
+ * is important, you can read [https://docs.angularjs.org/guide/scope](https://docs.angularjs.org/guide/scope).
+ *
  * @param {string=} delegate-handle The handle used to identify this scrollView
  * with {@link ionic.service:$ionicScrollDelegate}.
  * @param {boolean=} padding Whether to add padding to the content.
@@ -44,7 +47,7 @@ function($timeout, $controller, $ionicBind) {
     compile: function(element, attr) {
       var innerElement;
 
-      element.addClass('scroll-content');
+      element.addClass('scroll-content ionic-scroll');
 
       if (attr.scroll != 'false') {
         //We cannot use normal transclude here because it breaks element.data()
@@ -79,7 +82,6 @@ function($timeout, $controller, $ionicBind) {
           $onScroll: '&onScroll',
           $onScrollComplete: '&onScrollComplete',
           hasBouncing: '@',
-          scroll: '@',
           padding: '@',
           hasScrollX: '@',
           hasScrollY: '@',
@@ -96,7 +98,7 @@ function($timeout, $controller, $ionicBind) {
           });
         }
 
-        if ($scope.scroll === "false") {
+        if ($attr.scroll === "false") {
           //do nothing
         } else if(attr.overflowScroll === "true") {
           $element.addClass('overflow-scroll');

@@ -2,7 +2,7 @@
  * Copyright 2014 Drifty Co.
  * http://drifty.com/
  *
- * Ionic, v1.0.0-beta.4
+ * Ionic, v1.0.0-beta.5b
  * A powerful HTML5 mobile app framework.
  * http://ionicframework.com/
  *
@@ -62,8 +62,15 @@ var deprecated = {
 var IonicModule = angular.module('ionic', ['ngAnimate', 'ngSanitize', 'ui.router']),
   extend = angular.extend,
   forEach = angular.forEach,
+<<<<<<< HEAD
   isString = angular.isString,
   jqLite = angular.element;
+=======
+  isDefined = angular.isDefined,
+  isString = angular.isString,
+  jqLite = angular.element;
+
+>>>>>>> upstream/master
 
 /**
  * @ngdoc service
@@ -136,8 +143,8 @@ function($rootScope, $document, $compile, $animate, $timeout, $ionicTemplateLoad
      *  - `{string=}` `destructiveText` The text for a 'danger' on the action sheet.
      *  - `{function=}` `cancel` Called if the cancel button is pressed or the backdrop is tapped.
      *  - `{function=}` `buttonClicked` Called when one of the non-destructive buttons is clicked,
-     *     with the index of the button that was clicked. Return true to close the action sheet,
-     *     or false to keep it opened.
+     *     with the index of the button that was clicked and the button object. Return true to close
+     *     the action sheet, or false to keep it opened.
      *  - `{function=}` `destructiveButtonClicked` Called when the destructive button is clicked.
      *     Return true to close the action sheet, or false to keep it opened.
      */
@@ -147,7 +154,8 @@ function($rootScope, $document, $compile, $animate, $timeout, $ionicTemplateLoad
       extend(scope, {
         cancel: angular.noop,
         buttonClicked: angular.noop,
-        destructiveButtonClicked: angular.noop
+        destructiveButtonClicked: angular.noop,
+        buttons: []
       }, opts);
 
       // Compile the template
@@ -188,7 +196,7 @@ function($rootScope, $document, $compile, $animate, $timeout, $ionicTemplateLoad
       scope.buttonClicked = function(index) {
         // Check if the button click event returned true, which means
         // we can close the action sheet
-        if((opts.buttonClicked && opts.buttonClicked(index)) === true) {
+        if((opts.buttonClicked && opts.buttonClicked(index, opts.buttons[index])) === true) {
           hideSheet(false);
         }
       };
@@ -292,22 +300,22 @@ jqLite.prototype.removeClass = function(cssClasses) {
  *    var anim = $ionicAnimate({
  *     // A unique, reusable name
  *     name: 'popIn',
- *     
+ *
  *     // The duration of an auto playthrough
  *     duration: 0.5,
- *     
+ *
  *     // How long to wait before running the animation
  *     delay: 0,
- *     
+ *
  *     // Whether to reverse after doing one run through
  *     autoReverse: false,
- *     
+ *
  *     // How many times to repeat? -1 or null for infinite
  *     repeat: -1,
- *     
+ *
  *     // Timing curve to use (same as CSS timing functions), or a function of time "t" to handle it yourself
  *     curve: 'ease-in-out'
- *     
+ *
  *     onStart: function() {
  *       // Callback on start
  *     },
@@ -315,7 +323,7 @@ jqLite.prototype.removeClass = function(cssClasses) {
  *       // Callback on end
  *     },
  *     step: function(amt) {
- *       
+ *
  *     }
  *   })
  * });
@@ -329,12 +337,16 @@ IonicModule
     useSlowAnimations = isSlow;
   };
 
+  this.create = function(animation) {
+    return ionic.Animation.create(animation);
+  };
+
   this.$get = [function() {
     return function(opts) {
       opts.useSlowAnimations = useSlowAnimations;
       return ionic.Animation.create(opts);
-    }
-  }]
+    };
+  }];
 });
 
 /**
@@ -1173,6 +1185,7 @@ function($document, $ionicTemplateLoader, $ionicBackdrop, $timeout, $q, $log, $c
               ionic.DomUtil.centerElementByMarginTwice(self.element[0]);
               ionic.requestAnimationFrame(function() {
                 self.isShown && self.element.addClass('active');
+                ionic.DomUtil.centerElementByMarginTwice(self.element[0]);
               });
             }
           });
@@ -1245,7 +1258,8 @@ function($document, $ionicTemplateLoader, $ionicBackdrop, $timeout, $q, $log, $c
  * @module ionic
  * @description
  * The Modal is a content pane that can go over the user's main view
- * temporarily.  Usually used for making a choice or editing an item.
+ * temporarily.  Usually used for making a choice or editing an item. 
+ * Note that you need to put the content of the modal inside a div with the class `modal`.
  *
  * @usage
  * ```html
@@ -1278,6 +1292,14 @@ function($document, $ionicTemplateLoader, $ionicBackdrop, $timeout, $q, $log, $c
  *   //Cleanup the modal when we're done with it!
  *   $scope.$on('$destroy', function() {
  *     $scope.modal.remove();
+ *   });
+ *   // Execute action on hide modal
+ *   $scope.$on('modal.hide', function() {
+ *     // Execute action
+ *   });
+ *   // Execute action on remove modal
+ *   $scope.$on('modal.removed', function() {
+ *     // Execute action
  *   });
  * });
  * ```
@@ -1318,6 +1340,8 @@ function($rootScope, $document, $compile, $timeout, $ionicPlatform, $ionicTempla
      *    Default: 'slide-in-up'
      *  - `{boolean=}` `focusFirstInput` Whether to autofocus the first input of
      *    the modal when shown.  Default: false.
+     *  - `{boolean=} `backdropClickToClose` Whether to close the modal on clicking the backdrop.
+     *    Default: true.
      */
     initialize: function(opts) {
       ionic.views.Modal.prototype.initialize.call(this, opts);
@@ -1337,7 +1361,7 @@ function($rootScope, $document, $compile, $timeout, $ionicPlatform, $ionicTempla
       self.el.classList.remove('hide');
       $timeout(function(){
         $document[0].body.classList.add('modal-open');
-      }, 400)
+      }, 400);
 
 
       if(!self.el.parentElement) {
@@ -1365,7 +1389,7 @@ function($rootScope, $document, $compile, $timeout, $ionicPlatform, $ionicTempla
       return $timeout(function() {
         //After animating in, allow hide on backdrop click
         self.$el.on('click', function(e) {
-          if (e.target === self.el) {
+          if (self.backdropClickToClose && e.target === self.el) {
             self.hide();
           }
         });
@@ -2532,8 +2556,7 @@ IonicModule
  * @description
  * Delegate that controls the {@link ionic.directive:ionSlideBox} directive.
  *
- * Methods called directly on the $ionicSlideBoxDelegate service will control all side
- * menus.  Use the {@link ionic.service:$ionicSlideBoxDelegate#$getByHandle $getByHandle}
+ * Methods called directly on the $ionicSlideBoxDelegate service will control all slide boxes.  Use the {@link ionic.service:$ionicSlideBoxDelegate#$getByHandle $getByHandle}
  * method to control specific slide box instances.
  *
  * @usage
@@ -2696,7 +2719,7 @@ IonicModule
    *
    * Example: `$ionicTabsDelegate.$getByHandle('my-handle').select(0);`
    */
-]))
+]));
 
 
 IonicModule
@@ -3538,6 +3561,9 @@ function($scope, $element, $attrs, $ionicViewService, $animate, $compile, $ionic
   };
 
   this.setTitle = function(title) {
+    if ($scope.title === title) {
+      return;
+    }
     $scope.oldTitle = $scope.title;
     $scope.title = title || '';
   };
@@ -3611,7 +3637,7 @@ function($scope, $element, $attrs, $ionicViewService, $animate, $compile, $ionic
       });
     });
   };
-}])
+}]);
 
 
 /**
@@ -3780,8 +3806,6 @@ function($scope, scrollViewOptions, $timeout, $window, $$scrollValueCache, $loca
       });
     }
   };
-
-
 
   /**
    * @private
@@ -4061,30 +4085,30 @@ IonicModule
     restrict: 'E',
     replace: true,
     require: '?ngModel',
-    scope: {
-      ngModel: '=?',
-      ngValue: '=?',
-      ngChecked: '=?',
-      ngDisabled: '=?',
-      ngChange: '&'
-    },
     transclude: true,
-
     template: '<label class="item item-checkbox">' +
                 '<div class="checkbox checkbox-input-hidden disable-pointer-events">' +
-                  '<input type="checkbox" ng-model="ngModel" ng-value="ngValue" ng-change="ngChange()">' +
+                  '<input type="checkbox">' +
                   '<i class="checkbox-icon"></i>' +
                 '</div>' +
                 '<div class="item-content disable-pointer-events" ng-transclude></div>' +
               '</label>',
-
     compile: function(element, attr) {
       var input = element.find('input');
-      if(attr.name) input.attr('name', attr.name);
-      if(attr.ngChecked) input.attr('ng-checked', attr.ngChecked);
-      if(attr.ngDisabled) input.attr('ng-disabled', attr.ngDisabled);
-      if(attr.ngTrueValue) input.attr('ng-true-value', attr.ngTrueValue);
-      if(attr.ngFalseValue) input.attr('ng-false-value', attr.ngFalseValue);
+      forEach({
+        'name': attr.name,
+        'ng-value': attr.ngValue,
+        'ng-model': attr.ngModel,
+        'ng-checked': attr.ngChecked,
+        'ng-disabled': attr.ngDisabled,
+        'ng-true-value': attr.ngTrueValue,
+        'ng-false-value': attr.ngFalseValue,
+        'ng-change': attr.ngChange
+      }, function(value, name) {
+        if (isDefined(value)) {
+          input.attr(name, value);
+        }
+      });
     }
 
   };
@@ -4122,6 +4146,7 @@ IonicModule
  * 6. Each collection-repeat list will take up all of its parent scrollView's space.
  * If you wish to have multiple lists on one page, put each list within its own
  * {@link ionic.directive:ionScroll ionScroll} container.
+ * 7. You should not use the ng-show and ng-hide directives on your ion-content/ion-scroll elements that have a collection-repeat inside.  ng-show and ng-hide apply the `display: none` css rule to the content's style, causing the scrollView to read the width and height of the content as 0.  Resultingly, collection-repeat will render elements that have just been un-hidden incorrectly.
  *
  *
  * @usage
@@ -4556,7 +4581,8 @@ function tapScrollToTopDirective() {
             bounds.left, bounds.top - 20,
             bounds.left + bounds.width, bounds.top + bounds.height
           )) {
-            $ionicScrollDelegate.scrollTop(true);
+            var scrollCtrl = $element.controller('$ionicScroll');
+            scrollCtrl && scrollCtrl.scrollTop(true);
           }
         }
       }
@@ -4582,9 +4608,10 @@ function headerFooterBarDirective(isHeader) {
 
           if (isHeader) {
             $scope.$watch(function() { return el.className; }, function(value) {
+              var isShown = value.indexOf('ng-hide') === -1;
               var isSubheader = value.indexOf('bar-subheader') !== -1;
-              $scope.$hasHeader = !isSubheader;
-              $scope.$hasSubheader = isSubheader;
+              $scope.$hasHeader = isShown && !isSubheader;
+              $scope.$hasSubheader = isShown && isSubheader;
             });
             $scope.$on('$destroy', function() {
               delete $scope.$hasHeader;
@@ -4592,9 +4619,10 @@ function headerFooterBarDirective(isHeader) {
             });
           } else {
             $scope.$watch(function() { return el.className; }, function(value) {
+              var isShown = value.indexOf('ng-hide') === -1;
               var isSubfooter = value.indexOf('bar-subfooter') !== -1;
-              $scope.$hasFooter = !isSubfooter;
-              $scope.$hasSubfooter = isSubfooter;
+              $scope.$hasFooter = isShown && !isSubfooter;
+              $scope.$hasSubfooter = isShown && isSubfooter;
             });
             $scope.$on('$destroy', function() {
               delete $scope.$hasFooter;
@@ -4713,7 +4741,7 @@ IonicModule
         $element[0].classList.add('active');
         infiniteScrollCtrl.isLoading = true;
         $scope.$parent && $scope.$parent.$apply($attrs.onInfinite || '');
-      }
+      };
 
       var finishInfiniteScroll = function() {
         $element[0].classList.remove('active');
@@ -4791,7 +4819,9 @@ function($animate, $compile) {
     }],
     scope: true,
     compile: function($element, $attrs) {
-      var isAnchor = angular.isDefined($attrs.href) || angular.isDefined($attrs.ngHref);
+      var isAnchor = angular.isDefined($attrs.href) ||
+        angular.isDefined($attrs.ngHref) ||
+        angular.isDefined($attrs.uiSref);
       var isComplexItem = isAnchor ||
         //Lame way of testing, but we have to know at compile what to do with the element
         /ion-(delete|option|reorder)-button/i.test($element.html());
@@ -5250,7 +5280,7 @@ IonicModule
       });
     }
   };
-}])
+}]);
 
 
 /*
@@ -5551,7 +5581,10 @@ IonicModule
 
         //Append buttons to navbar
         ionic.requestAnimationFrame(function() {
-          $animate.enter(buttons, navElement);
+          //If the scope is destroyed before raf runs, be sure not to enter
+          if (!$scope.$$destroyed) {
+            $animate.enter(buttons, navElement);
+          }
         });
 
         //When our ion-nav-buttons container is destroyed,
@@ -5631,7 +5664,7 @@ function($ionicViewService, $location, $state, $window, $rootScope) {
  * @name ionNavView
  * @module ionic
  * @restrict E
- * @codepen HjnFx
+ * @codepen odqCz
  *
  * @description
  * As a user navigates throughout your app, Ionic is able to keep track of their
@@ -6014,7 +6047,9 @@ IonicModule
     '<div class="scroll-refresher">' +
       '<div class="ionic-refresher-content" ' +
       'ng-class="{\'ionic-refresher-with-text\': pullingText || refreshingText}">' +
-        '<i class="icon {{pullingIcon}} icon-pulling"></i>' +
+        '<div class="icon-pulling">' +
+          '<i class="icon {{pullingIcon}}"></i>' +
+        '</div>' +
         '<div class="text-pulling" ng-bind-html="pullingText"></div>' +
         '<i class="icon {{refreshingIcon}} icon-refreshing"></i>' +
         '<div class="text-refreshing" ng-bind-html="refreshingText"></div>' +
@@ -6511,10 +6546,10 @@ function($timeout, $compile, $ionicSlideBoxDelegate) {
         slider.load();
       });
     }],
-    template: '<div class="slider">\
-            <div class="slider-slides" ng-transclude>\
-            </div>\
-          </div>',
+    template: '<div class="slider">' +
+      '<div class="slider-slides" ng-transclude>' +
+      '</div>' +
+    '</div>',
 
     link: function($scope, $element, $attr, slideBoxCtrl) {
       // If the pager should show, append it to the slide box
@@ -7005,11 +7040,8 @@ IonicModule
 
           // watch for changes in the title, don't set initial value as changeTitle does that
           $attr.$observe('title', function(val, oldVal) {
-            if (val !== initialTitle) {
-              navBarCtrl.setTitle(val);
-            }
+            navBarCtrl.setTitle(val);
           });
-
         }
 
         var hideBackAttr = angular.isDefined($attr.hideBackButton) ?

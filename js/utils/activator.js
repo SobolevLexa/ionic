@@ -26,6 +26,7 @@
           }
           if( ele.tagName == 'A' || ele.tagName == 'BUTTON' || ele.hasAttribute('ng-click') ) {
             eleToActivate = ele;
+            break;
           }
           if( ele.classList.contains('button') ) {
             eleToActivate = ele;
@@ -53,7 +54,7 @@
 
     end: function() {
       // clear out any active/queued elements after XX milliseconds
-      clearTimeout(this._activateTimeout)
+      clearTimeout(this._activateTimeout);
       setTimeout(clear, 200);
     }
 
