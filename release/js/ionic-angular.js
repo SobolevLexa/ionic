@@ -5418,10 +5418,6 @@ IonicModule
  *
  * @description
  * keyboard-attach is an attribute directive which will cause an element to float above
-<<<<<<< HEAD
- * the keyboard when the keyboard shows. Currently only supports the [ion-footer-bar]({{ page.versionHref }}/api/directive/ionFooterBar/)
- * directive.
-=======
  * the keyboard when the keyboard shows. Currently only supports the
  * [ion-footer-bar]({{ page.versionHref }}/api/directive/ionFooterBar/) directive.
  *
@@ -5433,7 +5429,6 @@ IonicModule
  *   this directive is unnecessary since it is the default behavior.
  * - On iOS, if there is an input in your footer, you will need to set
  *   `cordova.plugins.Keyboard.disableScroll(true)`.
->>>>>>> upstream/master
  *
  * @usage
  *
@@ -5447,33 +5442,21 @@ IonicModule
 IonicModule
 .directive('keyboardAttach', function() {
   return function(scope, element, attrs) {
-<<<<<<< HEAD
-    window.addEventListener('native.keyboardshow', onShow);
-    window.addEventListener('native.keyboardhide', onHide);
-
-    //deprecated
-    window.addEventListener('native.showkeyboard', onShow);
-    window.addEventListener('native.hidekeyboard', onHide);
-=======
     ionic.on('native.keyboardshow', onShow, window);
     ionic.on('native.keyboardhide', onHide, window);
 
     //deprecated
     ionic.on('native.showkeyboard', onShow, window);
     ionic.on('native.hidekeyboard', onHide, window);
->>>>>>> upstream/master
 
 
     var scrollCtrl;
 
     function onShow(e) {
-<<<<<<< HEAD
-=======
       if (ionic.Platform.isAndroid() && !ionic.Platform.isFullScreen) {
         return;
       }
 
->>>>>>> upstream/master
       //for testing
       var keyboardHeight = e.keyboardHeight || e.detail.keyboardHeight;
       element.css('bottom', keyboardHeight + "px");
@@ -5484,13 +5467,10 @@ IonicModule
     }
 
     function onHide() {
-<<<<<<< HEAD
-=======
       if (ionic.Platform.isAndroid() && !ionic.Platform.isFullScreen) {
         return;
       }
 
->>>>>>> upstream/master
       element.css('bottom', '');
       if ( scrollCtrl ) {
         scrollCtrl.scrollView.__container.style.bottom = '';
@@ -5498,20 +5478,12 @@ IonicModule
     }
 
     scope.$on('$destroy', function() {
-<<<<<<< HEAD
-      window.removeEventListener('native.keyboardshow', onShow);
-      window.removeEventListener('native.keyboardhide', onHide);
-      
-      window.removeEventListener('native.showkeyboard', onShow);
-      window.removeEventListener('native.hidekeyboard', onHide);
-=======
       ionic.off('native.keyboardshow', onShow, window);
       ionic.off('native.keyboardhide', onHide, window);
 
       //deprecated
       ionic.off('native.showkeyboard', onShow, window);
       ionic.off('native.hidekeyboard', onHide, window);
->>>>>>> upstream/master
     });
   };
 });
@@ -5596,11 +5568,7 @@ function keyboardAttachGetClientHeight(element) {
 */
 /**
  * @ngdoc demo
-<<<<<<< HEAD
- * @name ionList#everything
-=======
  * @name ionList#reorderDelete
->>>>>>> upstream/master
  * @module listEverything
  * @javascript
  * angular.module('listEverything', ['ionic'])
@@ -5729,10 +5697,7 @@ function keyboardAttachGetClientHeight(element) {
  * }
  * .animated-item {
  *   line-height: 52px;
-<<<<<<< HEAD
-=======
  *   max-height: 52px;
->>>>>>> upstream/master
  *   padding-top: 0;
  *   padding-bottom: 0;
  *   -webkit-transition: all 0.15s linear;
