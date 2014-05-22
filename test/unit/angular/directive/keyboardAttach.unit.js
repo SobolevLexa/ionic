@@ -15,6 +15,7 @@ describe('keyboardAttach directive', function() {
   
   it('should move up when window fires native.showkeyboard event', function() {
     var el = setup().el;
+    ionic.Platform.isFullScreen = true;
     expect(el.css('bottom')).toEqual('');
     ionic.trigger('native.showkeyboard', { target: window, keyboardHeight: 33 });
     expect(el.css('bottom')).toEqual('33px');
@@ -34,20 +35,21 @@ describe('keyboardAttach directive', function() {
     ionic.trigger('native.showkeyboard', { target: window, keyboardHeight: 33 });
     expect(content.css('bottom')).toEqual(keyboardHeight + elHeight + 'px');
   });
+
+  it('should do nothing if Android and not fullscreen', function() {
+    var el = setup().el;
+    ionic.Platform.isFullScreen = false;
+    expect(el.css('bottom')).toEqual('');
+    ionic.trigger('native.showkeyboard', { target: window, keyboardHeight: 33 });
+    expect(el.css('bottom')).toEqual('');
+    el.scope().$destroy();
+  });
   
   it('should remove listeners on destroy', function() {
-    spyOn(window, 'removeEventListener');
+    spyOn(ionic, 'off');
     var el = setup().el;
     el.scope().$destroy();
-    expect(window.removeEventListener).toHaveBeenCalledWith('native.showkeyboard', jasmine.any(Function));
-    expect(window.removeEventListener).toHaveBeenCalledWith('native.hidekeyboard', jasmine.any(Function));
-  });
-
-  it('should remove listeners on destroy', function() {
-    spyOn(window, 'removeEventListener');
-    var el = setup().el;
-    el.scope().$destroy();
-    expect(window.removeEventListener).toHaveBeenCalledWith('native.showkeyboard', jasmine.any(Function));
-    expect(window.removeEventListener).toHaveBeenCalledWith('native.hidekeyboard', jasmine.any(Function));
+    expect(ionic.off).toHaveBeenCalledWith('native.keyboardshow', jasmine.any(Function), window);
+    expect(ionic.off).toHaveBeenCalledWith('native.keyboardhide', jasmine.any(Function), window);
   });
 })

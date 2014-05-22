@@ -33,16 +33,11 @@ function push {
   cd $IONIC_DIR
 
   # Get first codename in list
-  CODENAME=$(cat config/CODENAMES | head -n 1)
-  # Remove first line of codenames, it's used now
-  echo "`tail -n +2 config/CODENAMES`" > config/CODENAMES
+  CODENAME=$(readJsonProp "$PROJECT_DIR/package.json" "codename")
 
+  replaceJsonProp "package.json" "version" "$VERSION"
   replaceJsonProp "bower.json" "version" "$VERSION"
   replaceJsonProp "component.json" "version" "$VERSION"
-
-  replaceJsonProp "package.json" "codename" "$CODENAME"
-  replaceJsonProp "bower.json" "codename" "$CODENAME"
-  replaceJsonProp "component.json" "codename" "$CODENAME"
 
   echo "-- Putting built files into release folder"
   mkdir -p release
@@ -58,6 +53,7 @@ function push {
   echo "-- v$VERSION \"$CODENAME\" pushed to $RELEASE_REMOTE/master successfully!"
 }
 
+# Unused. TODO remove and rewrite as node.js script
 function github {
   echo "-- Pushing out github release..."
 
@@ -101,6 +97,7 @@ function github {
   echo "-- Github release pushed out successfully!"
 }
 
+# Unused. TODO remove and rewrite as node.js script
 function discourse {
   CODENAME=$(readJsonProp "$IONIC_DIR/package.json" "codename")
   # Get only newest things in changelog - sed until previous version is hit

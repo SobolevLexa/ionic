@@ -14,6 +14,7 @@ module.exports = {
     contentsFolder = config.get('rendering.contentsFolder');
   },
   process: function(docs, config, extraData) {
+    if(1) return;
     var demoTags = [
       'javascript',
       'html',
@@ -85,17 +86,29 @@ module.exports = {
           }
 
         });
-        var outputPath = outputFolder + '/' + _.template(demoPath, {
+        var indexOutputPath = outputFolder + '/' + _.template(demoPath, {
           name: demo.name,
           filename: 'index',
           extension: 'html'
         });
+        var scriptOutputPath = outputFolder + '/' + _.template(demoPath, {
+          name: demo.name,
+          filename: 'demo',
+          extension: 'js'
+        });
 
-        //Write this specific demo's index page
+        //Write this specific demo's index & js page
         docs.push({
           docType: 'demo',
-          outputPath: path.join(config.get('demos.outputFolder'), outputPath),
+          outputPath: path.join(config.get('demos.outputFolder'), indexOutputPath),
           template: 'demo_index.template.html',
+          demoData: demoData,
+          name: doc.name
+        });
+        docs.push({
+          docType: 'demo',
+          outputPath: path.join(config.get('demos.outputFolder'), scriptOutputPath),
+          template: 'demo_script.template.js',
           demoData: demoData,
           name: doc.name
         });
@@ -103,7 +116,7 @@ module.exports = {
     })
     .value();
 
-    //Write the demo page for this whole version (eg at /nightly)
+    //Write the demo index & js for the whole version (eg at /nightly)
     docs.push({
       docType: 'demo',
       template: 'demo_index.template.html',
@@ -111,6 +124,26 @@ module.exports = {
         config.get('demos.outputFolder'),
         config.get('versionData.current.folder'),
         'index.html'
+      )
+    });
+    docs.push({
+      docType: 'demo',
+      template: 'demo_script.template.js',
+      outputPath: path.join(
+        config.get('demos.outputFolder'),
+        config.get('versionData.current.folder'),
+        'demo.js'
+      )
+    });
+
+    //Write the demo list to current version (eg at /nightly);
+    docs.push({
+      docType: 'demo',
+      template: 'demo_list.template.js',
+      outputPath: path.join(
+        config.get('demos.outputFolder'),
+        config.get('versionData.current.folder'),
+        'demo-list.js'
       )
     });
 
