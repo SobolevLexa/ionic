@@ -10,7 +10,9 @@
  * the user gets to the bottom of the page or near the bottom of the page.
  *
  * The expression you pass in for `on-infinite` is called when the user scrolls
- * greater than `distance` away from the bottom of the content.
+ * greater than `distance` away from the bottom of the content.  Once `on-infinite`
+ * is done loading new data, it should broadcast the `scroll.infiniteScrollComplete`
+ * event from your controller (see below example).
  *
  * @param {expression} on-infinite What to call when the scroller reaches the
  * bottom.
@@ -53,47 +55,6 @@
  *   on-infinite="loadMoreData()">
  * </ion-infinite-scroll>
  * ```
- */
-/**
- * @ngdoc demo
- * @name ionInfiniteScroll#forever
- * @module infiniteScrollForever
- * @javascript
- * angular.module('infiniteScrollForever', ['ionic'])
- * .controller('ForeverCtrl', function($scope, $timeout) {
- *   $scope.items = [];
- *   for (var i = 0; i < 20; i++) {
- *     $scope.items.push(i);
- *   }
- *
- *   //Load more after 1 second delay
- *   $scope.loadMoreItems = function() {
- *     $timeout(function() {
- *       var i = $scope.items.length;
- *       var j = $scope.items.length + 5;
- *       for (; i < j; i++) {
- *         $scope.items.push('Item ' + i);
- *       }
- *       $scope.$broadcast('scroll.infiniteScrollComplete');
- *     }, 1000);
- *   };
- * });
- *
- * @html
- * <ion-header-bar>
- *   <h1 class="title">Scroll Down to Load More</h1>
- * </ion-header-bar>
- * <ion-content ng-controller="ForeverCtrl">
- *   <div class="list">
- *     <div class="item" ng-repeat="item in items">
- *       {{item}}
- *     </div>
- *   </div>
- *
- *   <ion-infinite-scroll on-infinite="loadMoreItems()"
- *     icon="ion-loading-c">
- *   </ion-infinite-scroll>
- * </ion-content>
  */
 IonicModule
 .directive('ionInfiniteScroll', ['$timeout', function($timeout) {

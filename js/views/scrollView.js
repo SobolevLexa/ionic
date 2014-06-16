@@ -352,6 +352,8 @@ ionic.views.Scroll = ionic.views.View.inherit({
       /** Multiply or decrease scrolling speed **/
       speedMultiplier: 1,
 
+      deceleration: 0.97,
+
       /** Callback that is fired on the later of touch end or deceleration end,
         provided that another scrolling action has not begun. Used to know
         when to fade out a scrollbar. */
@@ -816,7 +818,9 @@ ionic.views.Scroll = ionic.views.View.inherit({
         }
         self.doTouchStart(getEventTouches(e), e.timeStamp);
 
-        e.preventDefault();
+        if( !ionic.tap.isTextInput(e.target) ) {
+          e.preventDefault();
+        }
         mousedown = true;
       };
 
@@ -846,7 +850,7 @@ ionic.views.Scroll = ionic.views.View.inherit({
 
           self.hintResize();
           self.scrollBy(
-            e.wheelDeltaX/self.options.wheelDampen, 
+            e.wheelDeltaX/self.options.wheelDampen,
             -e.wheelDeltaY/self.options.wheelDampen
           );
 
@@ -1583,6 +1587,9 @@ ionic.views.Scroll = ionic.views.View.inherit({
     self.__initialTouchLeft = currentTouchLeft;
     self.__initialTouchTop = currentTouchTop;
 
+    // Store initial touchList for scale calculation
+    self.__initialTouches = touches;
+
     // Store current zoom level
     self.__zoomLevelStart = self.__zoomLevel;
 
@@ -1642,6 +1649,11 @@ ionic.views.Scroll = ionic.views.View.inherit({
     if (touches.length === 2) {
       currentTouchLeft = Math.abs(touches[0].pageX + touches[1].pageX) / 2;
       currentTouchTop = Math.abs(touches[0].pageY + touches[1].pageY) / 2;
+
+      // Calculate scale when not present and only when touches are used
+      if (!scale && self.options.zooming) {
+        scale = self.__getScale(self.__initialTouches, touches);
+      }
     } else {
       currentTouchLeft = touches[0].pageX;
       currentTouchTop = touches[0].pageY;
@@ -2143,8 +2155,8 @@ ionic.views.Scroll = ionic.views.View.inherit({
     //
 
     // Add deceleration to scroll position
-    var scrollLeft = self.__scrollLeft + self.__decelerationVelocityX;
-    var scrollTop = self.__scrollTop + self.__decelerationVelocityY;
+    var scrollLeft = self.__scrollLeft + self.__decelerationVelocityX;// * self.options.deceleration);
+    var scrollTop = self.__scrollTop + self.__decelerationVelocityY;// * self.options.deceleration);
 
 
     //
@@ -2194,7 +2206,7 @@ ionic.views.Scroll = ionic.views.View.inherit({
       // This is the factor applied to every iteration of the animation
       // to slow down the process. This should emulate natural behavior where
       // objects slow down when the initiator of the movement is removed
-      var frictionFactor = 0.95;
+      var frictionFactor = self.options.deceleration;
 
       self.__decelerationVelocityX *= frictionFactor;
       self.__decelerationVelocityY *= frictionFactor;
@@ -2253,6 +2265,39 @@ ionic.views.Scroll = ionic.views.View.inherit({
         }
       }
     }
+  },
+
+
+  /**
+   * calculate the distance between two touches
+   * @param   {Touch}     touch1
+   * @param   {Touch}     touch2
+   * @returns {Number}    distance
+   */
+  __getDistance: function getDistance(touch1, touch2) {
+    var x = touch2.pageX - touch1.pageX,
+    y = touch2.pageY - touch1.pageY;
+    return Math.sqrt((x*x) + (y*y));
+  },
+
+
+  /**
+   * calculate the scale factor between two touchLists (fingers)
+   * no scale is 1, and goes down to 0 when pinched together, and bigger when pinched out
+   * @param   {Array}     start
+   * @param   {Array}     end
+   * @returns {Number}    scale
+   */
+  __getScale: function getScale(start, end) {
+
+    var self = this;
+
+    // need two fingers...
+    if(start.length >= 2 && end.length >= 2) {
+      return self.__getDistance(end[0], end[1]) /
+        self.__getDistance(start[0], start[1]);
+    }
+    return 1;
   }
 });
 

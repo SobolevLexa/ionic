@@ -155,7 +155,8 @@ ionic.tap = {
            (e.target.isContentEditable) ||
            (/^(file|range)$/i).test(e.target.type) ||
            (e.target.dataset ? e.target.dataset.preventScroll : e.target.getAttribute('data-prevent-default')) == 'true' || // manually set within an elements attributes
-           (!!(/^(object|embed)$/i).test(e.target.tagName));  // flash/movie/object touches should not try to scroll
+           (!!(/^(object|embed)$/i).test(e.target.tagName)) ||  // flash/movie/object touches should not try to scroll
+           ionic.tap.isElementTapDisabled(e.target); // check if this element, or an ancestor, has `data-tap-disabled` attribute
   },
 
   isTextInput: function(ele) {
@@ -224,7 +225,11 @@ ionic.tap = {
     if(!ele || ele.disabled || (/^(file|range)$/i).test(ele.type) || (/^(object|video)$/i).test(ele.tagName) ) {
       return true;
     }
-    if(ele.nodeType === 1) {
+    return ionic.tap.isElementTapDisabled(ele);
+  },
+
+  isElementTapDisabled: function(ele) {
+    if(ele && ele.nodeType === 1) {
       var element = ele;
       while(element) {
         if( (element.dataset ? element.dataset.tapDisabled : element.getAttribute('data-tap-disabled')) == 'true' ) {
@@ -239,6 +244,12 @@ ionic.tap = {
   setTolerance: function(releaseTolerance, releaseButtonTolerance) {
     TAP_RELEASE_TOLERANCE = releaseTolerance;
     TAP_RELEASE_BUTTON_TOLERANCE = releaseButtonTolerance;
+  },
+
+  cancelClick: function() {
+    // used to cancel any simulated clicks which may happen on a touchend/mouseup
+    // gestures uses this method within its tap and hold events
+    tapPointerMoved = true;
   }
 
 };
@@ -500,7 +511,7 @@ function tapActiveElement(ele) {
 }
 
 function tapHasPointerMoved(endEvent) {
-  if(!endEvent || !tapPointerStart || ( tapPointerStart.x === 0 && tapPointerStart.y === 0 )) {
+  if(!endEvent || endEvent.target.nodeType !== 1 || !tapPointerStart || ( tapPointerStart.x === 0 && tapPointerStart.y === 0 )) {
     return false;
   }
   var endCoordinates = getPointerCoordinates(endEvent);

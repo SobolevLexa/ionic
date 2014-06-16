@@ -3,6 +3,8 @@
 node_modules
 *.sw[mnpcod]
 *.log
+*.tmp
+*.tmp.*
 log.txt
 example/cordova/iOS/www/js/framework
 
@@ -20,4 +22,7 @@ UserInterfaceState.xcuserstate
 bower_components/
 components/
 tmp
+temp
 dist
+
+.idea

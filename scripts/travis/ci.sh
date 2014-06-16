@@ -10,29 +10,26 @@ function init {
   if [[ "$TRAVIS" == "true" ]]; then
     git config --global user.name 'Ionitron'
     git config --global user.email hi@ionicframework.com
-    export GH_ORG=driftyco
-    export RELEASE_REMOTE=origin
+    export GIT_PUSH_DRYRUN="false"
   else
     # For testing if we aren't on travis
     export TRAVIS_BUILD_NUMBER=$RANDOM
     export TRAVIS_PULL_REQUEST=false
     export TRAVIS_COMMIT=$(git rev-parse HEAD)
     export TRAVIS_BRANCH=master
-    # use your github username as GH_ORG to push to, and it will push to ORG/ionic-code, etc
-    export GH_ORG=ajoslin
-    export RELEASE_REMOTE=ajoslin
+    export GIT_PUSH_DRYRUN="true"
   fi
 }
 
 function run {
   cd ../..
 
-  echo "GH_ORG=$GH_ORG"
-  echo "RELEASE_REMOTE=$RELEASE_REMOTE"
+  echo "GH_ORG=driftyco"
   echo "TRAVIS_BRANCH=$TRAVIS_BRANCH"
   echo "TRAVIS_BUILD_NUMBER=$TRAVIS_BUILD_NUMBER"
   echo "TRAVIS_PULL_REQUEST=$TRAVIS_PULL_REQUEST"
   echo "TRAVIS_COMMIT=$TRAVIS_COMMIT"
+  echo "GIT_PUSH_DRYRUN=$GIT_PUSH_DRYRUN"
 
   # check for stupid mistakes
   gulp jshint
@@ -47,9 +44,9 @@ function run {
     exit 0
   fi
 
-  mkdir -p tmp
-  git show $TRAVIS_COMMIT~1:package.json > tmp/package.old.json
-  OLD_VERSION=$(readJsonProp "tmp/package.old.json" "version")
+  git show $TRAVIS_COMMIT~1:package.json > package-old.json.tmp
+  OLD_VERSION=$(readJsonProp "package-old.json.tmp" "version")
+
   VERSION=$(readJsonProp "package.json" "version")
   CODENAME=$(readJsonProp "package.json" "codename")
 
@@ -77,13 +74,26 @@ function run {
     echo "# Pushing out a new nightly release #"
     echo "#####################################"
 
-    ./scripts/travis/bump-nightly-version.sh
-    VERSION=$(readJsonProp "package.json" "version")
-    CODENAME=$(readJsonProp "package.json" "codename")
+    CURRENT_VERSION=$VERSION
+    VERSION="$CURRENT_VERSION-nightly-$TRAVIS_BUILD_NUMBER"
+    replaceJsonProp "package.json" "version" "$VERSION"
+
+    echo "-- Build version is $NEW_VERSION."
   fi
 
-  # Build files after we are sure our version is correct
-  gulp build --release
+  export IONIC_DIR=$PWD
+  export IONIC_SCSS_DIR=$IONIC_DIR/scss
+  export IONIC_DIST_DIR=$IONIC_DIR/dist
+  export IONIC_BUILD_DIR=$IONIC_DIR/dist/build
+
+  mkdir -p $IONIC_DIST_DIR $IONIC_BUILD_DIR
+  gulp build --release --dist="$IONIC_BUILD_DIR"
+
+  echo "IONIC_DIR=$IONIC_DIR"
+  echo "IONIC_SCSS_DIR=IONIC_SCSS_DIR=$IONIC_SCSS_DIR"
+  echo "IONIC_DIST_DIR=$IONIC_DIST_DIR"
+  echo "IONIC_BUILD_DIR=$IONIC_BUILD_DIR"
+
 
   if [[ $IS_RELEASE == "true" ]]; then
 
@@ -94,32 +104,25 @@ function run {
     # Version name used on the CDN/docs: nightly or the version
     VERSION_NAME=$VERSION
 
-    ./scripts/site/publish.sh --action="clone"
     ./scripts/site/publish.sh --action="updateConfig"
-    ./scripts/seed/publish.sh --version="$VERSION"
     ./scripts/app-base/publish.sh --version="$VERSION"
 
-    ./scripts/travis/release-new-version.sh \
-      --action="tweetAndIrc" \
-      --version=$VERSION
+    gulp release-tweet
+    gulp release-irc
+
   else
-    ./scripts/site/publish.sh --action="clone"
 
     VERSION_NAME="nightly"
 
     gulp changelog --standalone \
       --html=true \
       --subtitle="(changes since $OLD_VERSION)" \
-      --dest="dist/CHANGELOG.html" \
+      --dest="$IONIC_BUILD_DIR/CHANGELOG.html" \
       --from="$(git tag | grep $OLD_VERSION)"
   fi
 
   ./scripts/site/publish.sh \
     --action="docs" \
-    --version-name="$VERSION_NAME"
-
-  ./scripts/site/publish.sh \
-    --action="demos" \
     --version-name="$VERSION_NAME"
 
   ./scripts/cdn/publish.sh \
@@ -129,6 +132,9 @@ function run {
   ./scripts/bower/publish.sh \
     --version="$VERSION" \
     --codename="$CODENAME"
+
+  ./scripts/demo/publish.sh \
+    --version-name="$VERSION_NAME"
 
 
   if [[ "$IS_RELEASE" == "true" ]]; then
@@ -150,4 +156,3 @@ function run {
 }
 
 source $(dirname $0)/../utils.inc
-
