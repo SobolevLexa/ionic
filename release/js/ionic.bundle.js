@@ -2947,7 +2947,7 @@ function tapActiveElement(ele) {
 }
 
 function tapHasPointerMoved(endEvent) {
-  if(!endEvent || !tapPointerStart || ( tapPointerStart.x === 0 && tapPointerStart.y === 0 )) {
+  if(!endEvent || endEvent.target.nodeType !== 1 || !tapPointerStart || ( tapPointerStart.x === 0 && tapPointerStart.y === 0 )) {
     return false;
   }
   var endCoordinates = getPointerCoordinates(endEvent);
@@ -36272,10 +36272,10 @@ var IonicModule = angular.module('ionic', ['ngAnimate', 'ngSanitize', 'ui.router
  *  $scope.show = function() {
  *
  *    // Show the action sheet
- *    var hideSheet = $ionicActionSheet({
+ *    var hideSheet = $ionicActionSheet.show({
  *      buttons: [
  *        { text: '<b>Share</b> This' },
- *        { text: 'Move' },
+ *        { text: 'Move' }
  *      ],
  *      destructiveText: 'Delete',
  *      titleText: 'Modify your album',
@@ -40815,6 +40815,8 @@ function($timeout, $controller, $ionicBind) {
         innerElement = jqLite('<div class="scroll"></div>');
         innerElement.append(element.contents());
         element.append(innerElement);
+      } else {
+        element.addClass('scroll-content-false');
       }
 
       return { pre: prelink };
@@ -41608,11 +41610,9 @@ IonicModule
       if ( !input || !inputLabel ) return;
 
       var onInput = function() {
-        var hasInput = inputLabel.classList.contains('has-input');
-        if ( input.value && !hasInput ) {
+        if ( input.value ) {
           inputLabel.classList.add('has-input');
-        }
-        else if ( !input.value && hasInput ) {
+        } else {
           inputLabel.classList.remove('has-input');
         }
       };
@@ -41623,8 +41623,6 @@ IonicModule
       if ( ngModelCtrl ) {
         ngModelCtrl.$render = function() {
           input.value = ngModelCtrl.$viewValue || '';
-          if ( ngModelCtrl.$viewValue ) input.value = ngModelCtrl.$viewValue;
-          else input.value = '';
           onInput();
         };
       }

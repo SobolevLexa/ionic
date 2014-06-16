@@ -78,19 +78,10 @@
   100% {
     transform: rotate(359deg); } }
 
-
 .ion-loading-a {
   -webkit-animation-timing-function: steps(8, start);
   -moz-animation-timing-function: steps(8, start);
   animation-timing-function: steps(8, start); }
-
-
-
-
-
-
-
-
 
 .ion-alert:before {
   content: "\f101"; }
@@ -1846,6 +1837,7 @@ legend {
  * 3. Address margins set differently in Firefox 4+, Safari 5, and Chrome.
  * 4. Remove any default :focus styles
  * 5. Make sure webkit font smoothing is being inherited
+ * 6. Remove default gradient in Android Firefox / FirefoxOS
  */
 button, input, select, textarea {
   margin: 0;
@@ -1861,7 +1853,9 @@ button, input, select, textarea {
   outline-width: 0;
   /* 4 */
   -webkit-font-smoothing: inherit;
-  /* 5 */ }
+  /* 5 */
+  background-image: none;
+  /* 6 */ }
 
 /**
  * Address Firefox 4+ setting `line-height` on `input` using `importnt` in
@@ -2007,6 +2001,9 @@ body.grade-b, body.grade-c {
   margin-top: -1px;
   width: auto;
   height: auto; }
+
+.scroll-content-false {
+  z-index: 10; }
 
 .scroll-view {
   position: relative;
@@ -3177,7 +3174,6 @@ a.subdued {
   pointer-events: none; }
 
 /** Platform styles **/
-
 .tab-item.tab-item-android {
   border-top: 2px solid inherit; }
 
@@ -5982,7 +5978,6 @@ a.button {
     -webkit-animation-fill-mode: both;
     -moz-animation-fill-mode: both;
     animation-fill-mode: both; }
-
 
 .slide-out-left-add {
   -webkit-transform: translate3d(0, 0, 0);
