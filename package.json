@@ -1,8 +1,8 @@
 {
   "name": "ionic",
   "private": false,
-  "version": "1.0.0-beta.7",
-  "codename": "einsteinium-emu",
+  "version": "1.0.0-beta.8",
+  "codename": "fermium-flamingo",
   "repository": {
     "url": "git://github.com/driftyco/ionic.git"
   },

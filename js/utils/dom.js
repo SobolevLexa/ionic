@@ -31,9 +31,6 @@
     window.mozCancelAnimationFrame ||
     window.webkitCancelRequestAnimationFrame;
 
-  window.requestAnimationFrame = window._rAF;
-  window.cancelAnimationFrame = cancelAnimationFrame;
-
   /**
   * @ngdoc utility
   * @name ionic.DomUtil
@@ -50,10 +47,11 @@
      * happens.
      */
     requestAnimationFrame: function(cb) {
-      window._rAF(cb);
+      return window._rAF(cb);
     },
 
-    cancelAnimationFrame: function(cb) {
+    cancelAnimationFrame: function(requestId) {
+      cancelAnimationFrame(requestId);
     },
 
     /**

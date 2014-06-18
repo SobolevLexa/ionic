@@ -9,7 +9,7 @@
  * Copyright 2014 Drifty Co.
  * http://drifty.com/
  *
- * Ionic, v1.0.0-beta.7
+ * Ionic, v1.0.0-beta.8
  * A powerful HTML5 mobile app framework.
  * http://ionicframework.com/
  *
@@ -26,7 +26,7 @@
 window.ionic = {
   controllers: {},
   views: {},
-  version: '1.0.0-beta.7'
+  version: '1.0.0-beta.8'
 };
 
 (function(ionic) {
@@ -176,9 +176,6 @@ window.ionic = {
     window.mozCancelAnimationFrame ||
     window.webkitCancelRequestAnimationFrame;
 
-  window.requestAnimationFrame = window._rAF;
-  window.cancelAnimationFrame = cancelAnimationFrame;
-
   /**
   * @ngdoc utility
   * @name ionic.DomUtil
@@ -195,10 +192,11 @@ window.ionic = {
      * happens.
      */
     requestAnimationFrame: function(cb) {
-      window._rAF(cb);
+      return window._rAF(cb);
     },
 
-    cancelAnimationFrame: function(cb) {
+    cancelAnimationFrame: function(requestId) {
+      cancelAnimationFrame(requestId);
     },
 
     /**
@@ -4131,7 +4129,7 @@ ionic.views.Scroll = ionic.views.View.inherit({
         return Math.max(self.__content.scrollWidth, self.__content.offsetWidth);
       },
       getContentHeight: function() {
-        return Math.max(self.__content.scrollHeight, self.__content.offsetHeight);
+        return Math.max(self.__content.scrollHeight, self.__content.offsetHeight + self.__content.offsetTop);
       }
 		};
 
@@ -6112,7 +6110,10 @@ ionic.scroll = {
 
           childSize = null;
           if(c.nodeType == 3) {
-            childSize = ionic.DomUtil.getTextBounds(c).width;
+            var bounds = ionic.DomUtil.getTextBounds(c);
+            if(bounds) {
+              childSize = bounds.width;
+            }
           } else if(c.nodeType == 1) {
             childSize = c.offsetWidth;
           }
@@ -36183,7 +36184,7 @@ angular.module('ui.router.compat')
  * Copyright 2014 Drifty Co.
  * http://drifty.com/
  *
- * Ionic, v1.0.0-beta.7
+ * Ionic, v1.0.0-beta.8
  * A powerful HTML5 mobile app framework.
  * http://ionicframework.com/
  *
@@ -36324,7 +36325,7 @@ function($rootScope, $document, $compile, $animate, $timeout, $ionicTemplateLoad
    *  - `[Object]` `buttons` Which buttons to show.  Each button is an object with a `text` field.
    *  - `{string}` `titleText` The title to show on the action sheet.
    *  - `{string=}` `cancelText` the text for a 'cancel' button on the action sheet.
-   *  - `{string=}` `destructivetext` The text for a 'danger' on the action sheet.
+   *  - `{string=}` `destructiveText` The text for a 'danger' on the action sheet.
    *  - `{function=}` `cancel` Called if the cancel button is pressed, the backdrop is tapped or
    *     the hardware back button is pressed.
    *  - `{function=}` `buttonClicked` Called when one of the non-destructive buttons is clicked,
@@ -36933,7 +36934,7 @@ function($rootScope, $timeout) {
 
     this.isVertical = !!this.scrollView.options.scrollingY;
     this.renderedItems = {};
-
+    this.dimensions = [];
     this.setCurrentIndex(0);
 
     //Override scrollview's render callback
@@ -37059,19 +37060,26 @@ function($rootScope, $timeout) {
       }
     },
     /*
-     * setCurrentIndex: set the index in the list that matches the scroller's position.
+     * setCurrentIndex sets the index in the list that matches the scroller's position.
      * Also save the position in the scroller for next and previous items (if they exist)
      */
     setCurrentIndex: function(index, height) {
+      var currentPos = (this.dimensions[index] || {}).primaryPos || 0;
       this.currentIndex = index;
 
       this.hasPrevIndex = index > 0;
       if (this.hasPrevIndex) {
-        this.previousPos = this.dimensions[index - 1].primaryPos;
+        this.previousPos = Math.max(
+          currentPos - this.dimensions[index - 1].primarySize,
+          this.dimensions[index - 1].primaryPos
+        );
       }
       this.hasNextIndex = index + 1 < this.dataSource.getLength();
       if (this.hasNextIndex) {
-        this.nextPos = this.dimensions[index + 1].primaryPos;
+        this.nextPos = Math.min(
+          currentPos + this.dimensions[index + 1].primarySize,
+          this.dimensions[index + 1].primaryPos
+        );
       }
     },
     /**
@@ -41133,26 +41141,22 @@ function gestureDirective(directiveName) {
   return ['$ionicGesture', '$parse', function($ionicGesture, $parse) {
     var eventType = directiveName.substr(2).toLowerCase();
 
-    return {
-      restrict: 'A',
-      compile: function($element, attr) {
-        var fn = $parse( attr[directiveName] );
+    return function(scope, element, attr) {
+      var fn = $parse( attr[directiveName] );
 
-        return function(scope, element, attr) {
-
-          var listener = function(ev) {
-            scope.$apply(function() {
-              fn(scope, {$event:event});
-            });
-          };
-
-          var gesture = $ionicGesture.on(eventType, listener, $element);
-
-          scope.$on('$destroy', function() {
-            $ionicGesture.off(gesture, eventType, listener);
+      var listener = function(ev) {
+        scope.$apply(function() {
+          fn(scope, {
+            $event: ev
           });
-        };
-      }
+        });
+      };
+
+      var gesture = $ionicGesture.on(eventType, listener, element);
+
+      scope.$on('$destroy', function() {
+        $ionicGesture.off(gesture, eventType, listener);
+      });
     };
   }];
 }
