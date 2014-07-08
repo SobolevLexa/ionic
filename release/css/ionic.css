@@ -3493,6 +3493,7 @@ a.subdued {
     background-color: rgba(0, 0, 0, 0.5); }
 
 .modal {
+  display: block;
   position: absolute;
   top: 0;
   z-index: 10;
@@ -3531,6 +3532,8 @@ a.subdued {
   pointer-events: none; }
   .modal-open .modal, .modal-open .modal-backdrop {
     pointer-events: auto; }
+  .modal-open.loading-active .modal, .modal-open.loading-active .modal-backdrop {
+    pointer-events: none; }
 
 /**
  * Popups
@@ -4250,6 +4253,8 @@ a.item-content {
 
 .list:last-child {
   margin-bottom: 0px; }
+  .list:last-child.card {
+    margin-bottom: 40px; }
 
 /**
  * List Header
@@ -4680,7 +4685,7 @@ input[type="file"] {
   line-height: 34px; }
 
 .previous-input-focus, .cloned-text-input + input, .cloned-text-input + textarea {
-  position: absolute;
+  position: absolute !important;
   left: -9999px;
   width: 200px; }
 

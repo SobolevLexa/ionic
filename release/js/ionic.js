@@ -2622,7 +2622,9 @@ ionic.tap = {
           clonedInput.placeholder = focusInput.placeholder;
           clonedInput.type = focusInput.type;
           clonedInput.value = focusInput.value;
-          clonedInput.className = 'cloned-text-input';
+          clonedInput.style = focusInput.style;
+          clonedInput.className = focusInput.className;
+          clonedInput.classList.add('cloned-text-input');
           clonedInput.readOnly = true;
           focusInput.parentElement.insertBefore(clonedInput, focusInput);
           focusInput.style.top = focusInput.offsetTop;
@@ -2655,10 +2657,18 @@ ionic.tap = {
   },
 
   requiresNativeClick: function(ele) {
-    if(!ele || ele.disabled || (/^(file|range)$/i).test(ele.type) || (/^(object|video)$/i).test(ele.tagName) ) {
+    if(!ele || ele.disabled || (/^(file|range)$/i).test(ele.type) || (/^(object|video)$/i).test(ele.tagName) || ionic.tap.isLabelContainingFileInput(ele) ) {
       return true;
     }
     return ionic.tap.isElementTapDisabled(ele);
+  },
+
+  isLabelContainingFileInput: function(ele) {
+    var lbl = tapContainingElement(ele);
+    if(lbl.tagName !== 'LABEL') return false;
+    var fileInput = lbl.querySelector('input[type=file]');
+    if(fileInput && fileInput.disabled === false) return true;
+    return false;
   },
 
   isElementTapDisabled: function(ele) {
@@ -2949,7 +2959,10 @@ function tapHasPointerMoved(endEvent) {
   }
   var endCoordinates = getPointerCoordinates(endEvent);
 
-  var releaseTolerance = (endEvent.target.classList.contains('button') ? TAP_RELEASE_BUTTON_TOLERANCE : TAP_RELEASE_TOLERANCE);
+  var hasClassList = !!(endEvent.target.classList && endEvent.target.classList.contains);
+  var releaseTolerance = hasClassList & endEvent.target.classList.contains('button') ?
+    TAP_RELEASE_BUTTON_TOLERANCE :
+    TAP_RELEASE_TOLERANCE;
 
   return Math.abs(tapPointerStart.x - endCoordinates.x) > releaseTolerance ||
          Math.abs(tapPointerStart.y - endCoordinates.y) > releaseTolerance;
@@ -5874,6 +5887,16 @@ ionic.views.Scroll = ionic.views.View.inherit({
         Math.abs(self.__decelerationVelocityY) >= self.__minVelocityToKeepDecelerating;
       if (!shouldContinue) {
         self.__didDecelerationComplete = true;
+
+        //Make sure the scroll values are within the boundaries after a bounce,
+        //not below 0 or above maximum
+        if (self.options.bouncing) {
+          self.scrollTo(
+            Math.min( Math.max(self.__scrollLeft, 0), self.__maxScrollLeft ),
+            Math.min( Math.max(self.__scrollTop, 0), self.__maxScrollTop ),
+            false
+          );
+        }
       }
       return shouldContinue;
     };
@@ -6415,17 +6438,17 @@ ionic.scroll = {
       if (e.gesture.deltaY < 0 && pixelsPastTop > 0 && scrollY > 0) {
         this.scrollView.scrollBy(null, -pixelsPastTop);
         //Trigger another drag so the scrolling keeps going
-        setTimeout(function() {
+        ionic.requestAnimationFrame(function() {
           self.drag(e);
-        }.bind(this));
+        });
       }
       if (e.gesture.deltaY > 0 && pixelsPastBottom > 0) {
         if (scrollY < this.scrollView.getScrollMax().top) {
           this.scrollView.scrollBy(null, pixelsPastBottom);
           //Trigger another drag so the scrolling keeps going
-          setTimeout(function() {
+          ionic.requestAnimationFrame(function() {
             self.drag(e);
-          }.bind(this));
+          });
         }
       }
     }
@@ -6441,32 +6464,37 @@ ionic.scroll = {
 
       this._currentDrag.currentY = scrollY + pageY - offset;
 
-      this._reorderItems();
+      // this._reorderItems();
     }
   });
 
   // When an item is dragged, we need to reorder any items for sorting purposes
-  ReorderDrag.prototype._reorderItems = function() {
+  ReorderDrag.prototype._getReorderIndex = function() {
     var self = this;
     var placeholder = this._currentDrag.placeholder;
     var siblings = Array.prototype.slice.call(this._currentDrag.placeholder.parentNode.children)
       .filter(function(el) {
-        return el !== self.el;
+        return el.nodeName === self.el.nodeName && el !== self.el;
       });
 
-    var index = siblings.indexOf(this._currentDrag.placeholder);
-    var topSibling = siblings[Math.max(0, index - 1)];
-    var bottomSibling = siblings[Math.min(siblings.length, index+1)];
-    var thisOffsetTop = this._currentDrag.currentY;// + this._currentDrag.startOffsetTop;
-
-   if(topSibling && (thisOffsetTop < topSibling.offsetTop + topSibling.offsetHeight)) {
-      ionic.DomUtil.swapNodes(this._currentDrag.placeholder, topSibling);
-      return index - 1;
-    } else if(bottomSibling && thisOffsetTop > (bottomSibling.offsetTop)) {
-      ionic.DomUtil.swapNodes(bottomSibling, this._currentDrag.placeholder);
-      return index + 1;
+    var dragOffsetTop = this._currentDrag.currentY;
+    var el;
+    for (var i = 0, len = siblings.length; i < len; i++) {
+      el = siblings[i];
+      if (i === len - 1) {
+        if (dragOffsetTop > el.offsetTop) {
+          return i;
+        }
+      } else if (i === 0) {
+        if (dragOffsetTop < el.offsetTop + el.offsetHeight) {
+          return i;
+        }
+      } else if (dragOffsetTop > el.offsetTop - el.offsetHeight / 2 &&
+                 dragOffsetTop < el.offsetTop + el.offsetHeight * 1.5) {
+        return i;
+      }
     }
-  
+    return this._currentDrag.startIndex;
   };
 
   ReorderDrag.prototype.end = function(e, doneCallback) {
@@ -6476,7 +6504,7 @@ ionic.scroll = {
     }
 
     var placeholder = this._currentDrag.placeholder;
-    var finalPosition = ionic.DomUtil.getChildIndex(placeholder, placeholder.nodeName.toLowerCase());
+    var finalIndex = this._getReorderIndex();
 
     // Reposition the element
     this.el.classList.remove(ITEM_REORDERING_CLASS);
@@ -6485,7 +6513,7 @@ ionic.scroll = {
     placeholder.parentNode.insertBefore(this.el, placeholder);
     placeholder.parentNode.removeChild(placeholder);
 
-    this.onReorder && this.onReorder(this.el, this._currentDrag.startIndex, finalPosition);
+    this.onReorder && this.onReorder(this.el, this._currentDrag.startIndex, finalIndex);
 
     this._currentDrag = null;
     doneCallback && doneCallback();
@@ -6901,7 +6929,7 @@ ionic.views.Slider = ionic.views.View.inherit({
       slidePos = new Array(slides.length);
 
       // determine width of each slide
-      width = container.offsetWidth || container.getBoundClientRect().width;
+      width = container.offsetWidth || container.getBoundingClientRect().width;
 
       element.style.width = (slides.length * width) + 'px';
 
@@ -7609,7 +7637,7 @@ ionic.views.Slider = ionic.views.View.inherit({
 (function(ionic) {
 'use strict';
 
-  /**
+/**
    * The SideMenuController is a controller with a left and/or right menu that
    * can be slid out and toggled. Seen on many an app.
    *
@@ -7886,10 +7914,28 @@ ionic.views.Slider = ionic.views.View.inherit({
       this._startX = null;
       this._lastX = null;
       this._offsetX = null;
+      this._firstX = null;
+      this._doDrag = false;
     },
 
     // Handle a drag event
     _handleDrag: function(e) {
+
+      //Get the start position of the drag
+      if (!this._firstX) {
+       this._firstX = e.gesture.touches[0].pageX;
+       this.content._cachedWidth = this.content.element.offsetWidth;
+      }
+
+      //Allow the drag to affect the side if:
+      // - the side menu is already opened, or
+      // - there is no edge drag threshold enabled, or
+      // - the drag is within the edge drag threshold
+      this._doDrag = this.isOpen() ||
+        !this.edgeDragThreshold() ||
+        this._firstX <= this.dragThreshold ||
+        this._firstX >= this.content._cachedWidth - this.dragThreshold;
+
       // If we don't have start coords, grab and store them
       if(!this._startX) {
         this._startX = e.gesture.touches[0].pageX;
@@ -7900,7 +7946,7 @@ ionic.views.Slider = ionic.views.View.inherit({
       }
 
       // Calculate difference from the tap points
-      if(!this._isDragging && Math.abs(this._lastX - this._startX) > this.dragThresholdX) {
+      if(!this._isDragging && this._doDrag && Math.abs(this._lastX - this._startX) > this.dragThresholdX) {
         // if the difference is greater than threshold, start dragging using the current
         // point as the starting point
         this._startX = this._lastX;
