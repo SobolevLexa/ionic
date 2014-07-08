@@ -746,6 +746,24 @@ describe('Ionic Tap', function() {
     expect( ionic.tap.requiresNativeClick( div5 ) ).toEqual(true);
   });
 
+  it('Should ionic.tap.requiresNativeClick for labels containing input[file]', function() {
+    var lbl = document.createElement('label');
+    var ele = document.createElement('input');
+    ele.type = 'file';
+    lbl.appendChild(ele);
+    expect( ionic.tap.requiresNativeClick( lbl ) ).toEqual(true);
+  });
+
+  it('Should ionic.tap.requiresNativeClick for elements underneath labels containing input[file]', function() {
+    var lbl = document.createElement('label');
+    var txt = document.createElement('span');
+    var ele = document.createElement('input');
+    ele.type = 'file';
+    lbl.appendChild(ele);
+    lbl.appendChild(txt);
+    expect( ionic.tap.requiresNativeClick( txt ) ).toEqual(true);
+  });
+
   it('Should not allow a click that has an textarea target but not created by tapClick', function() {
     var e = {
       target: document.createElement('textarea'),
@@ -938,6 +956,30 @@ describe('Ionic Tap', function() {
       tapFocusOutActive(ele);
       expect( ele.hasBlurred ).toEqual(true);
     }
+  });
+
+  it('Should get containing element of label when passed a deeply nested div', function() {
+    var label = document.createElement('label');
+    var div1 = document.createElement('div');
+    var div2 = document.createElement('div');
+    var div3 = document.createElement('div');
+    var div4 = document.createElement('div');
+    var div5 = document.createElement('div');
+    var div6 = document.createElement('div');
+    div6.id = 'div6';
+
+    label.appendChild(div1);
+    div1.appendChild(div2);
+    div2.appendChild(div3);
+    div3.appendChild(div4);
+    div4.appendChild(div5);
+    div5.appendChild(div6);
+
+    // max depth
+    expect( tapContainingElement(div5).tagName ).toEqual('LABEL');
+
+    // too deep
+    expect( tapContainingElement(div6).id ).toEqual('div6');
   });
 
   it('Should get containing element of label when passed a label', function() {
@@ -1160,6 +1202,38 @@ describe('Ionic Tap', function() {
     ele = document.createElement('div');
     ele.setAttribute('contenteditable', false);
     expect( ionic.tap.isTextInput(ele) ).toEqual(false);
+  });
+
+  it('Should isDateInput', function() {
+    expect( ionic.tap.isDateInput(null) ).toEqual(false);
+
+    ele = document.createElement('input');
+
+    ele.type = 'date';
+    expect( ionic.tap.isDateInput(ele) ).toEqual(true);
+
+    ele.type = 'datetime-local';
+    expect( ionic.tap.isDateInput(ele) ).toEqual(true);
+
+    ele.type = 'month';
+    expect( ionic.tap.isDateInput(ele) ).toEqual(true);
+
+    ele.type = 'week';
+    expect( ionic.tap.isDateInput(ele) ).toEqual(true);
+
+    ele.type = 'time';
+    expect( ionic.tap.isDateInput(ele) ).toEqual(true);
+
+    ele.type = 'checkbox';
+    expect( ionic.tap.isDateInput(ele) ).toEqual(false);
+
+    ele.type = '';
+    expect( ionic.tap.isDateInput(ele) ).toEqual(false);
+
+    ele.type = 'text';
+    expect( ionic.tap.isDateInput(ele) ).toEqual(false);
+    
+    
   });
 
   it('Should isLabelWithTextInput', function() {
