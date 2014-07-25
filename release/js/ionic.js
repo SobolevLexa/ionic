@@ -1982,6 +1982,7 @@ window.ionic = {
    * @module ionic
    */
   ionic.Platform = {
+
     // Put navigator on platform so it can be mocked and set
     // the browser does not allow window.navigator to be set
     navigator: window.navigator,
@@ -5890,6 +5891,7 @@ ionic.views.Scroll = ionic.views.View.inherit({
         Math.abs(self.__decelerationVelocityY) >= self.__minVelocityToKeepDecelerating;
       if (!shouldContinue) {
         self.__didDecelerationComplete = true;
+
         //Make sure the scroll values are within the boundaries after a bounce,
         //not below 0 or above maximum
         if (self.options.bouncing) {
@@ -6274,8 +6276,8 @@ ionic.scroll = {
 
     if(!lastDrag) return;
 
-      lastDrag.content.style[ionic.CSS.TRANSITION] = '';
-      lastDrag.content.style[ionic.CSS.TRANSFORM] = '';
+    lastDrag.content.style[ionic.CSS.TRANSITION] = '';
+    lastDrag.content.style[ionic.CSS.TRANSFORM] = '';
     ionic.requestAnimationFrame(function() {
       setTimeout(function() {
         lastDrag.buttons && lastDrag.buttons.classList.add('invisible');
@@ -6486,8 +6488,7 @@ ionic.scroll = {
       if (i === len - 1) {
         if (dragOffsetTop > el.offsetTop) {
           return i;
-    }
-  
+        }
       } else if (i === 0) {
         if (dragOffsetTop < el.offsetTop + el.offsetHeight) {
           return i;
@@ -7640,7 +7641,7 @@ ionic.views.Slider = ionic.views.View.inherit({
 (function(ionic) {
 'use strict';
 
-  /**
+/**
    * The SideMenuController is a controller with a left and/or right menu that
    * can be slid out and toggled. Seen on many an app.
    *
@@ -7921,6 +7922,7 @@ ionic.views.Slider = ionic.views.View.inherit({
 
     // Handle a drag event
     _handleDrag: function(e) {
+
       // If we don't have start coords, grab and store them
       if(!this._startX) {
         this._startX = e.gesture.touches[0].pageX;

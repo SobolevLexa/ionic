@@ -1194,7 +1194,7 @@ IonicModule
 
 var LOADING_TPL =
   '<div class="loading-container">' +
-  '<div class="loading">' +
+    '<div class="loading">' +
     '</div>' +
   '</div>';
 
@@ -2277,6 +2277,7 @@ function($ionicTemplateLoader, $ionicBackdrop, $q, $timeout, $rootScope, $docume
       scope: null,
       title: '',
       buttons: [],
+      mainClass: '',
     }, options || {});
 
     var popupPromise = $ionicTemplateLoader.compile({
@@ -2310,6 +2311,7 @@ function($ionicTemplateLoader, $ionicBackdrop, $q, $timeout, $rootScope, $docume
         title: options.title,
         buttons: options.buttons,
         subTitle: options.subTitle,
+        mainClass: options.mainClass,
         $buttonTapped: function(button, event) {
           var result = (button.onTap || angular.noop)(event);
           event = event.originalEvent || event; //jquery events
@@ -2341,6 +2343,9 @@ function($ionicTemplateLoader, $ionicBackdrop, $q, $timeout, $rootScope, $docume
 
           self.element.removeClass('popup-hidden');
           self.element.addClass('popup-showing active');
+          if (self.scope.mainClass) {
+              self.element.addClass(self.scope.mainClass);
+          }
           ionic.DomUtil.centerElementByMarginTwice(self.element[0]);
           focusInputOrButton(self.element);
         });
@@ -2352,6 +2357,9 @@ function($ionicTemplateLoader, $ionicBackdrop, $q, $timeout, $rootScope, $docume
         self.isShown = false;
         self.element.removeClass('active');
         self.element.addClass('popup-hidden');
+          if (self.scope.mainClass) {
+              self.element.removeClass(self.scope.mainClass);
+          }
         $timeout(callback, 250);
       };
       self.remove = function() {
@@ -3134,7 +3142,7 @@ function($rootScope, $state, $location, $document, $animate, $ionicPlatform, $io
     return false;
   }
   $ionicPlatform.registerBackButtonAction(
-    onHardwareBackButton, 
+    onHardwareBackButton,
     PLATFORM_BACK_BUTTON_PRIORITY_VIEW
   );
 
@@ -4002,7 +4010,6 @@ function($scope, scrollViewOptions, $timeout, $window, $$scrollValueCache, $loca
         self.rememberScrollPosition(viewId);
         self.scrollToRememberedPosition();
 
-
         backListenDone = $rootScope.$on('$viewHistory.viewBack', function(e, fromViewId, toViewId) {
           //When going back from this view, forget its saved scroll position
           if (viewId === fromViewId) {
@@ -4152,6 +4159,7 @@ function($scope, $attrs, $ionicSideMenuDelegate, $ionicPlatform) {
     }
     return this.edgeThresholdEnabled;
   };
+
   this.isDraggableTarget = function(e) {
     //Only restrict edge when sidemenu is closed and restriction is enabled
     var shouldOnlyAllowEdgeDrag = self.edgeThresholdEnabled && !self.isOpen();
@@ -4165,8 +4173,8 @@ function($scope, $attrs, $ionicSideMenuDelegate, $ionicPlatform) {
     return ($scope.dragContent || self.isOpen()) &&
            dragIsWithinBounds &&
            !e.gesture.srcEvent.defaultPrevented &&
-            !e.target.tagName.match(/input|textarea|select|object|embed/i) &&
-            !e.target.isContentEditable &&
+           !e.target.tagName.match(/input|textarea|select|object|embed/i) &&
+           !e.target.isContentEditable &&
            !(e.target.dataset ? e.target.dataset.preventScroll : e.target.getAttribute('data-prevent-default') == 'true');
   };
 
@@ -4400,12 +4408,12 @@ IonicModule
     transclude: true,
     template:
       '<label class="item item-checkbox">' +
-                '<div class="checkbox checkbox-input-hidden disable-pointer-events">' +
-                  '<input type="checkbox">' +
-                  '<i class="checkbox-icon"></i>' +
-                '</div>' +
-                '<div class="item-content disable-pointer-events" ng-transclude></div>' +
-              '</label>',
+        '<div class="checkbox checkbox-input-hidden disable-pointer-events">' +
+          '<input type="checkbox">' +
+          '<i class="checkbox-icon"></i>' +
+        '</div>' +
+        '<div class="item-content disable-pointer-events" ng-transclude></div>' +
+      '</label>',
     compile: function(element, attr) {
       var input = element.find('input');
       forEach({
@@ -4447,19 +4455,19 @@ IonicModule
  * Here are a few things to keep in mind while using collection-repeat:
  *
  * 1. The data supplied to collection-repeat must be an array.
- * 2. You must explicitly tell the directive what size your items will be in the DOM, using directive attributes. 
+ * 2. You must explicitly tell the directive what size your items will be in the DOM, using directive attributes.
  * Pixel amounts or percentages are allowed (see below).
  * 3. The elements rendered will be absolutely positioned: be sure to let your CSS work with
  * this (see below).
  * 4. Keep the HTML of your repeated elements as simple as possible.
- * The more complicated your elements, the more likely it is that the on-demand compilation will cause 
+ * The more complicated your elements, the more likely it is that the on-demand compilation will cause
  * some jerkiness in the user's scrolling.
  * 6. Each collection-repeat list will take up all of its parent scrollView's space.
  * If you wish to have multiple lists on one page, put each list within its own
  * {@link ionic.directive:ionScroll ionScroll} container.
  * 7. You should not use the ng-show and ng-hide directives on your ion-content/ion-scroll elements that
  * have a collection-repeat inside.  ng-show and ng-hide apply the `display: none` css rule to the content's
- * style, causing the scrollView to read the width and height of the content as 0.  Resultingly, 
+ * style, causing the scrollView to read the width and height of the content as 0.  Resultingly,
  * collection-repeat will render elements that have just been un-hidden incorrectly.
  *
  *
@@ -4517,7 +4525,7 @@ IonicModule
  *   </div>
  * </ion-content>
  * ```
- * Percentage of total visible list dimensions. This example shows a 3 by 3 matrix that fits on the screen (3 rows and 3 colums). Note that dimensions are used in the creation of the element and therefore a measurement of the item cannnot be used as an input dimension. 
+ * Percentage of total visible list dimensions. This example shows a 3 by 3 matrix that fits on the screen (3 rows and 3 colums). Note that dimensions are used in the creation of the element and therefore a measurement of the item cannnot be used as an input dimension.
  * ```css
  * .my-image-item img {
  *   height: 33%;
@@ -4689,6 +4697,7 @@ function collectionRepeatSrcDirective(ngAttrName, attrName) {
     };
   }];
 }
+
 /**
  * @ngdoc directive
  * @name ionContent
@@ -4832,7 +4841,7 @@ function($timeout, $controller, $ionicBind) {
 var GESTURE_DIRECTIVES = 'onHold onTap onTouch onRelease onDrag onDragUp onDragRight onDragDown onDragLeft onSwipe onSwipeUp onSwipeRight onSwipeDown onSwipeLeft'.split(' ');
 
 GESTURE_DIRECTIVES.forEach(function(name) {
-    IonicModule.directive(name, gestureDirective(name));
+  IonicModule.directive(name, gestureDirective(name));
 });
 
 
@@ -5108,7 +5117,7 @@ IonicModule
  * Note: If you use ionHeaderBar in combination with ng-if, the surrounding content
  * will not align correctly.  This will be fixed soon.
  *
- * @param {string=} align-title Where to align the title.
+ * @param {string=} align-title Where to align the title. 
  * Available: 'left', 'right', or 'center'.  Defaults to 'center'.
  * @param {boolean=} no-tap-scroll By default, the header bar will scroll the
  * content to the top when tapped.  Set no-tap-scroll to true to disable this 
@@ -5680,6 +5689,7 @@ IonicModule
         var itemCtrl = ctrls[0];
         var listCtrl = ctrls[1];
         var onReorderFn = $parse($attr.onReorder);
+
         $scope.$onReorder = function(oldIndex, newIndex) {
           onReorderFn($scope, {
             $fromIndex: oldIndex,
@@ -5903,7 +5913,6 @@ function($animate, $timeout) {
               listCtrl.canSwipeItems(value);
             });
           }
-
           if (isDefined($attr.showDelete)) {
             $scope.$watch('!!(' + $attr.showDelete + ')', function(value) {
               listCtrl.showDelete(value);
@@ -5930,6 +5939,7 @@ function($animate, $timeout) {
             var deleteButton = jqLite($element[0].getElementsByClassName('item-delete'));
             setButtonShown(deleteButton, listCtrl.showDelete);
           });
+
           $scope.$watch(function() {
             return listCtrl.showReorder();
           }, function(isShown, wasShown) {
@@ -6056,6 +6066,7 @@ IonicModule
     }
   };
 });
+
 /**
  * @ngdoc directive
  * @name ionNavBackButton
@@ -6273,6 +6284,7 @@ function($ionicViewService, $rootScope, $animate, $compile, $ionicNavBarConfig) 
           '<div class="buttons right-buttons"> ' +
           '</div>'
         );
+
       if (isDefined(tAttrs.animation)) {
         tElement.addClass(tAttrs.animation);
       } else {
@@ -7103,7 +7115,7 @@ function($timeout, $ionicGesture) {
           $scope.$watch(attr.edgeDragThreshold, function(value) {
             sideMenuCtrl.edgeDragThreshold(value);
           });
-        }
+         }
 
         var defaultPrevented = false;
         var isDragging = false;
@@ -7624,6 +7636,7 @@ IonicModule
           if($attrs.hidden === 'true' || $attrs.hidden === true)return true;
           return false;
         };
+
         $scope.getIconOn = function() {
           return $scope.iconOn || $scope.icon;
         };
@@ -7774,14 +7787,14 @@ function($ionicGesture, $timeout) {
     transclude: true,
     template:
       '<div class="item item-toggle">' +
-                '<div ng-transclude></div>' +
-                '<label class="toggle">' +
+        '<div ng-transclude></div>' +
+        '<label class="toggle">' +
           '<input type="checkbox">' +
-                  '<div class="track">' +
-                    '<div class="handle"></div>' +
-                  '</div>' +
-                '</label>' +
-              '</div>',
+          '<div class="track">' +
+            '<div class="handle"></div>' +
+          '</div>' +
+        '</label>' +
+      '</div>',
 
     compile: function(element, attr) {
       var input = element.find('input');
@@ -7797,7 +7810,7 @@ function($ionicGesture, $timeout) {
       }, function(value, name) {
         if (isDefined(value)) {
           input.attr(name, value);
-      }
+        }
       });
 
       return function($scope, $element, $attr) {
