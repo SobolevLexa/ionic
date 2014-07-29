@@ -2392,7 +2392,7 @@ function($ionicTemplateLoader, $ionicBackdrop, $q, $timeout, $rootScope, $docume
     var resultPromise = $timeout(angular.noop, previousPopup ? config.stackPushDelay : 0)
     .then(function() { return popupPromise; })
     .then(function(popup) {
-      if (!previousPopup) {
+      if (!popupStack.length) {
         //Add popup-open & backdrop if this is first popup
         document.body.classList.add('popup-open');
         $ionicBackdrop.retain();
