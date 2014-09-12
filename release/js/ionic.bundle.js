@@ -37111,7 +37111,7 @@ var POPUP_TPL =
     '</div>' +
     '<div class="popup-body">' +
     '</div>' +
-      '<div class="popup-buttons">' +
+      '<div class="popup-buttons row">' +
         '<button ng-repeat="button in buttons" ng-click="$buttonTapped(button, $event)" class="button" ng-class="button.type || \'button-default\'" ng-bind-html="button.text"></button>' +
       '</div>' +
     '</div>' +
