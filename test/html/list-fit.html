@@ -18,6 +18,7 @@
       </a>
     </ion-header-bar>
     <ion-content>
+        <ion-refresher on-refresh="loadMore()"></ion-refresher>
       <p>
       Hi, I'm some text before the list.
       </p>
@@ -58,10 +59,11 @@ function MainCtrl($scope, $ionicScrollDelegate, $timeout, $q, $ionicLoading) {
 
   $scope.loadMore = function() {
     $timeout(function() {
-      var n = 1 + Math.floor(4*Math.random());
+      var n = 100;//1 + Math.floor(4*Math.random());
       for (var i = 0; i < n; i++) addImage();
       $scope.$broadcast('scroll.infiniteScrollComplete');
-    }, 1500);
+      $scope.$broadcast('scroll.refreshComplete');
+    }, 1);
   };
 }
   </script>

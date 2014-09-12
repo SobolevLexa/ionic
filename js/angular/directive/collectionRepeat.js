@@ -133,11 +133,6 @@ var COLLECTION_REPEAT_ATTR_WIDTH_ERROR = "collection-repeat expected attribute c
 var COLLECTION_REPEAT_ATTR_REPEAT_ERROR = "collection-repeat expected expression in form of '_item_ in _collection_[ track by _id_]' but got '%'";
 
 IonicModule
-.directive({
-  ngSrc: collectionRepeatSrcDirective('ngSrc', 'src'),
-  ngSrcset: collectionRepeatSrcDirective('ngSrcset', 'srcset'),
-  ngHref: collectionRepeatSrcDirective('ngHref', 'href')
-})
 .directive('collectionRepeat', [
   '$collectionRepeatManager',
   '$collectionDataSource',
@@ -217,15 +212,19 @@ function($collectionRepeatManager, $collectionDataSource, $parse) {
         rerender(value);
       });
 
+      // Find every sibling before and after the repeated items, and pass them
+      // to the dataSource
       var scrollViewContent = scrollCtrl.scrollView.__content;
       function rerender(value) {
         var beforeSiblings = [];
         var afterSiblings = [];
         var before = true;
+
         forEach(scrollViewContent.children, function(node, i) {
           if ( ionic.DomUtil.elementIsDescendant($element[0], node, scrollViewContent) ) {
             before = false;
           } else {
+            if (node.hasAttribute('collection-repeat-ignore')) return;
             var width = node.offsetWidth;
             var height = node.offsetHeight;
             if (width && height) {
@@ -245,20 +244,26 @@ function($collectionRepeatManager, $collectionDataSource, $parse) {
         dataSource.setData(value, beforeSiblings, afterSiblings);
         collectionRepeatManager.resize();
       }
-      function onWindowResize() {
+      function rerenderOnResize() {
         rerender($scope.$eval(listExpr));
       }
 
-      ionic.on('resize', onWindowResize, window);
+      scrollCtrl.$element.on('scroll.resize', rerenderOnResize);
+      ionic.on('resize', rerenderOnResize, window);
 
       $scope.$on('$destroy', function() {
         collectionRepeatManager.destroy();
         dataSource.destroy();
-        ionic.off('resize', onWindowResize, window);
+        ionic.off('resize', rerenderOnResize, window);
       });
     }
   };
-}]);
+}])
+.directive({
+  ngSrc: collectionRepeatSrcDirective('ngSrc', 'src'),
+  ngSrcset: collectionRepeatSrcDirective('ngSrcset', 'srcset'),
+  ngHref: collectionRepeatSrcDirective('ngHref', 'href')
+});
 
 // Fix for #1674
 // Problem: if an ngSrc or ngHref expression evaluates to a falsy value, it will
@@ -272,13 +277,11 @@ function collectionRepeatSrcDirective(ngAttrName, attrName) {
   return [function() {
     return {
       priority: '99', // it needs to run after the attributes are interpolated
-      link: function(scope, element, attr, collectionRepeatCtrl) {
-        if (!collectionRepeatCtrl) return;
+      link: function(scope, element, attr) {
         attr.$observe(ngAttrName, function(value) {
-          element[0][attr] = '';
-          setTimeout(function() {
-            element[0][attr] = value;
-          });
+          if (!value) {
+            element[0].removeAttribute(attrName);
+          }
         });
       }
     };
