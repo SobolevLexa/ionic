@@ -17,7 +17,7 @@ describe('Ionic Angular Side Menu', function() {
 
     expect(el.controller('ionSideMenus')).toBeDefined();
     expect($ionicSideMenuDelegate._registerInstance)
-      .toHaveBeenCalledWith(el.controller('ionSideMenus'), 'superHandle');
+      .toHaveBeenCalledWith(el.controller('ionSideMenus'), 'superHandle', jasmine.any(Function));
 
     expect(deregisterSpy).not.toHaveBeenCalled();
     el.scope().$destroy();
@@ -66,6 +66,7 @@ describe('Ionic Angular Side Menu', function() {
   }));
 
   it('should set exposed menu', inject(function($compile, $rootScope) {
+    ionic.animationFrameThrottle = function(cb) { return cb; };
     var el = $compile('<ion-side-menus><ion-side-menu></><ion-side-menu-content></ion-side-menu-content></ion-side-menus>')($rootScope.$new());
     $rootScope.$apply();
     var sideMenuController = el.controller('ionSideMenus');
@@ -169,6 +170,55 @@ describe('Ionic Angular Side Menu', function() {
     expect(ctrl.isDraggableTarget(e)).toBe(true);
 
   }));
+
+  it('should isDraggableTarget w/ enableMenuWithBackViews', inject(function($compile, $rootScope, $ionicHistory) {
+    var el = $compile('<ion-side-menus><ion-side-menu-content></ion-side-menu-content></ion-side-menus>')($rootScope.$new());
+    $rootScope.$apply();
+
+    var ctrl = el.controller('ionSideMenus');
+
+    var e = {
+      gesture: {
+        srcEvent: {
+          defaultPrevented: false
+        }
+      },
+      target: {
+        tagName: 'DIV',
+        dataset: {
+          preventScroll: false
+        }
+      }
+    };
+
+    ctrl.enableMenuWithBackViews(true);
+    expect(ctrl.isDraggableTarget(e)).toBe(true);
+
+    ctrl.enableMenuWithBackViews(false);
+    expect(ctrl.isDraggableTarget(e)).toBe(true);
+
+    ctrl.enableMenuWithBackViews(false);
+    $ionicHistory.currentView({historyId: 'root'});
+    $ionicHistory.backView({historyId: 'root'});
+    expect(ctrl.isDraggableTarget(e)).toBe(false);
+
+    ctrl.enableMenuWithBackViews(false);
+    $ionicHistory.currentView({historyId: 'root'});
+    $ionicHistory.backView(null);
+    expect(ctrl.isDraggableTarget(e)).toBe(true);
+
+    ctrl.enableMenuWithBackViews(true);
+    $ionicHistory.currentView({historyId: 'root'});
+    $ionicHistory.backView({historyId: 'root'});
+    expect(ctrl.isDraggableTarget(e)).toBe(true);
+
+    ctrl.enableMenuWithBackViews(false);
+    $ionicHistory.currentView({historyId: '003'});
+    $ionicHistory.backView({historyId: 'root'});
+    expect(ctrl.isDraggableTarget(e)).toBe(true);
+
+  }));
+
 });
 
 describe('Ionic Side Menu Content Directive', function () {
@@ -248,19 +298,16 @@ describe('Ionic Side Menu Directive', function () {
 
 describe('menuToggle directive', function() {
   beforeEach(module('ionic'));
-  it('should error without a side menu', inject(function($compile, $rootScope) {
-    expect(function() {
-      $compile('<div menu-toggle>')($rootScope.$new());
-    }).toThrow();
-  }));
-  var toggleLeftSpy, toggleRightSpy;
+  var toggleLeftSpy, toggleRightSpy, toggleSpy;
   function setup(side) {
     var el = angular.element('<div menu-toggle="' + (side||'') + '">');
     toggleLeftSpy = jasmine.createSpy('toggleLeft');
     toggleRightSpy = jasmine.createSpy('toggleRight');
+    toggleSpy = jasmine.createSpy('toggle');
     el.data('$ionSideMenusController', {
       toggleLeft: toggleLeftSpy,
-      toggleRight: toggleRightSpy
+      toggleRight: toggleRightSpy,
+      toggle: toggleSpy
     });
     inject(function($compile, $rootScope) {
       $compile(el)($rootScope.$new());
@@ -270,37 +317,26 @@ describe('menuToggle directive', function() {
   }
   it('should toggle left on click by default', function() {
     var el = setup();
-    expect(toggleLeftSpy).not.toHaveBeenCalled();
-    expect(toggleRightSpy).not.toHaveBeenCalled();
+    expect(toggleSpy).not.toHaveBeenCalled();
     el.triggerHandler('click');
-    expect(toggleLeftSpy).toHaveBeenCalled();
-    expect(toggleRightSpy).not.toHaveBeenCalled();
+    expect(toggleSpy).toHaveBeenCalled();
   });
   it('should toggle left on click with attr', function() {
     var el = setup('left');
-    expect(toggleLeftSpy).not.toHaveBeenCalled();
-    expect(toggleRightSpy).not.toHaveBeenCalled();
+    expect(toggleSpy).not.toHaveBeenCalled();
     el.triggerHandler('click');
-    expect(toggleLeftSpy).toHaveBeenCalled();
-    expect(toggleRightSpy).not.toHaveBeenCalled();
+    expect(toggleSpy).toHaveBeenCalled();
   });
   it('should toggle right on click with attr', function() {
     var el = setup('right');
-    expect(toggleLeftSpy).not.toHaveBeenCalled();
-    expect(toggleRightSpy).not.toHaveBeenCalled();
+    expect(toggleSpy).not.toHaveBeenCalled();
     el.triggerHandler('click');
-    expect(toggleLeftSpy).not.toHaveBeenCalled();
-    expect(toggleRightSpy).toHaveBeenCalled();
+    expect(toggleSpy).toHaveBeenCalled();
   });
 });
 
 describe('menuClose directive', function() {
   beforeEach(module('ionic'));
-  it('should error without a side menu', inject(function($compile, $rootScope) {
-    expect(function() {
-      $compile('<div menu-close>')($rootScope.$new());
-    }).toThrow();
-  }));
   it('should close on click', inject(function($compile, $rootScope) {
     var el = angular.element('<div menu-close>');
     var closeSpy = jasmine.createSpy('sideMenuClose');

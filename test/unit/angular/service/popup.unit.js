@@ -52,6 +52,13 @@ describe('$ionicPopup service', function() {
       var popupBody = popup.element[0].querySelector('.popup-body');
       expect(popupBody).toBe(null);
     });
+    it('should set the specified custom CSS class to popup container', function() {
+      var popup = TestUtil.unwrapPromise($ionicPopup._createPopup({
+        template: 'Hello, friend!',
+        cssClass: 'mycustomclass'
+      }));
+      expect(popup.element.hasClass('mycustomclass')).toBe(true);
+    });
 
     describe('$buttonTapped', function() {
       var popup;
@@ -265,9 +272,9 @@ describe('$ionicPopup service', function() {
       $ionicPopup.show();
       fakePopup.responseDeferred.resolve();
       $timeout.flush();
-      expect($ionicBackdrop.release).toHaveBeenCalled();
       expect(backDoneSpy).toHaveBeenCalled();
       $timeout.flush();
+      expect($ionicBackdrop.release).toHaveBeenCalled();
       expect(document.body.classList.contains('popup-open')).toBe(false);
     }));
     it('template should only overwrite prompt input if it includes html', inject(function($timeout) {

@@ -171,11 +171,11 @@
         };
       })
 
-      .controller('FirstSlideCtrl', function($scope) {
+      .controller('FirstSlideCtrl', function($scope, $ionicSlideBoxDelegate) {
         $scope.derp = function() {
         }
         $scope.toLast = function() {
-          $scope.slideBox.slide(2);
+          $ionicSlideBoxDelegate.slide(2);
         }
       });
 

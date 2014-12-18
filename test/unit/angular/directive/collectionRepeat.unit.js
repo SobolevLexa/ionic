@@ -71,8 +71,8 @@ describe('collectionRepeat directive', function() {
   });
 
   describe('widthGetter & heightGetter', function() {
-    it('should work with given amounts', function() {
-      var el = setup('collection-repeat="a in b" collection-item-height="5" collection-item-width="10"');
+    it('should work with given amounts parsed to int', function() {
+      var el = setup('collection-repeat="a in b" collection-item-height="\'5\'" collection-item-width="\'10\'"');
       expect(dataSource.options.heightGetter()).toBe(5);
       expect(dataSource.options.widthGetter()).toBe(10);
     });
@@ -115,9 +115,6 @@ describe('collectionRepeat directive', function() {
     expect(function() {
       el.scope().$apply('items = {}');
     }).toThrow();
-    expect(function() {
-      el.scope().$apply('items = []');
-    }).not.toThrow();
   });
 
   it('should rerender on list change', function() {

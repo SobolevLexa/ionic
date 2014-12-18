@@ -474,13 +474,18 @@ ionic.views.Slider = ionic.views.View.inherit({
       setup();
     };
 
+    this.loop = function(value) {
+      if (arguments.length) options.continuous = !!value;
+      return options.continuous;
+    };
+
     this.enableSlide = function(shouldEnable) {
       if (arguments.length) {
         this.slideIsDisabled = !shouldEnable;
       }
       return !this.slideIsDisabled;
     },
-    this.slide = function(to, speed) {
+    this.slide = this.select = function(to, speed) {
       // cancel slideshow
       stop();
 
@@ -510,12 +515,21 @@ ionic.views.Slider = ionic.views.View.inherit({
       begin();
     };
 
-    this.currentIndex = function() {
+    this.autoPlay = function(newDelay) {
+      if (!delay || delay < 0) {
+        stop();
+      } else {
+        delay = newDelay;
+        begin();
+      }
+    };
+
+    this.currentIndex = this.selected = function() {
       // return current index position
       return index;
     };
 
-    this.slidesCount = function() {
+    this.slidesCount = this.count = function() {
       // return total number of slides
       return length;
     };

@@ -189,9 +189,36 @@ describe('$ionicLoading service', function() {
       $timeout.flush();
       expect(deregisterSpy).not.toHaveBeenCalled();
       $ionicLoading.hide();
+      $timeout.flush();
       expect(deregisterSpy).toHaveBeenCalled();
     }));
   });
+
+  it('should use options.hideOnStateChange', inject(function($ionicLoading, $rootScope, $timeout) {
+    var loader = TestUtil.unwrapPromise($ionicLoading._getLoader());
+    $ionicLoading.show({
+      hideOnStateChange: true,
+      template: ''
+    });
+    spyOn(loader, 'hide');
+    $timeout.flush();
+    $rootScope.$broadcast('$stateChangeSuccess');
+    $rootScope.$apply();
+    expect(loader.hide).toHaveBeenCalled();
+  }));
+
+  it('should default false options.hideOnStateChange', inject(function($ionicLoading, $rootScope, $timeout) {
+    var loader = TestUtil.unwrapPromise($ionicLoading._getLoader());
+    $ionicLoading.show({
+      template: ''
+    });
+    spyOn(loader, 'hide');
+    $timeout.flush();
+    $rootScope.$broadcast('$stateChangeSuccess');
+    $rootScope.$apply();
+    expect(loader.hide).not.toHaveBeenCalled();
+  }));
+
 });
 describe('$ionicLoadingConfig', function() {
   beforeEach(module('ionic', function($provide) {
@@ -214,6 +241,20 @@ describe('$ionicLoadingConfig', function() {
     });
     $timeout.flush();
     expect(loader.element.text()).toBe('some other template');
+  }));
+
+  it('should use the original defaults with subsequent calls', inject(function($ionicLoading, $timeout) {
+    var loader = TestUtil.unwrapPromise($ionicLoading._getLoader());
+    $ionicLoading.show({
+      template: 'some other template'
+    });
+    $timeout.flush();
+    expect(loader.element.text()).toBe('some other template');
+    $ionicLoading.hide();
+    $timeout.flush();
+    $ionicLoading.show();
+    $timeout.flush();
+    expect(loader.element.text()).toBe('some template');
   }));
 
 });
