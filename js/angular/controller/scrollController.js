@@ -110,8 +110,10 @@ function($scope, scrollViewOptions, $timeout, $window, $location, $document, $io
   self.scrollBottom = function(shouldAnimate) {
     ionic.DomUtil.blurAll();
     self.resize().then(function() {
-      var max = scrollView.getScrollMax();
-      scrollView.scrollTo(max.left, max.top, !!shouldAnimate);
+      if (scrollView) {
+        var max = scrollView.getScrollMax();
+        scrollView.scrollTo(max.left, max.top, !!shouldAnimate);
+      }
     });
   };
 
