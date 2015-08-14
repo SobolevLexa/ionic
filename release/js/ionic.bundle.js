@@ -39923,8 +39923,10 @@ function($scope, scrollViewOptions, $timeout, $window, $$scrollValueCache, $loca
 
   this.scrollBottom = function(shouldAnimate) {
     this.resize().then(function() {
-      var max = scrollView.getScrollMax();
-      scrollView.scrollTo(max.left, max.top, !!shouldAnimate);
+      if (scrollView) {
+        var max = scrollView.getScrollMax();
+        scrollView.scrollTo(max.left, max.top, !!shouldAnimate);
+      }
     });
   };
 
